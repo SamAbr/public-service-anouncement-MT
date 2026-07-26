@@ -1,0 +1,22 @@
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+
+# Data outputs & checkpoints
+output/
+*.csv
+*.json
+
+# IDE and system files
+.idea/
+.vscode/
+.system_generated/
+*.log
