@@ -14,13 +14,14 @@ from templates import education, agriculture, governance, health, security
 from knowledge import institutions, audiences, actions, hazards, locations, terminology
 
 class PSAGenerator:
-    def __init__(self, size=50000, translator=None):
+    def __init__(self, size=50000, translator=None, checkpoint_file=None):
         self.size = size
         self.target_per_domain = size // len(DOMAINS)
         self.grammar_engine = ControlledGrammarEngine()
         self.deduplicator = Deduplicator()
         self.validator = ValidationEngine(min_words=MIN_WORDS, max_words=MAX_WORDS)
         self.translator = translator if translator else NLLBTranslator()
+        self.checkpoint_file = checkpoint_file if checkpoint_file else CHECKPOINT_FILE
         
         # Mapping domains to their templates
         self.templates_map = {
@@ -131,9 +132,9 @@ class PSAGenerator:
         translated_records = []
         start_idx = 0
         
-        if os.path.exists(CHECKPOINT_FILE):
+        if os.path.exists(self.checkpoint_file):
             try:
-                with open(CHECKPOINT_FILE, 'r', encoding='utf-8') as f:
+                with open(self.checkpoint_file, 'r', encoding='utf-8') as f:
                     checkpoint = json.load(f)
                     translated_records = checkpoint.get("records", [])
                     start_idx = checkpoint.get("next_index", 0)
@@ -173,13 +174,13 @@ class PSAGenerator:
                 "records": translated_records,
                 "next_index": end_idx
             }
-            with open(CHECKPOINT_FILE, 'w', encoding='utf-8') as f:
+            with open(self.checkpoint_file, 'w', encoding='utf-8') as f:
                 json.dump(checkpoint_data, f, ensure_ascii=False, indent=2)
                 
             print(f"Translated and checkpointed up to index {end_idx}/{total_to_translate}...")
             
         # Remove checkpoint file on successful completion
-        if os.path.exists(CHECKPOINT_FILE):
-            os.remove(CHECKPOINT_FILE)
+        if os.path.exists(self.checkpoint_file):
+            os.remove(self.checkpoint_file)
             
         return translated_records

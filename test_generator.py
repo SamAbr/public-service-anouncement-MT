@@ -85,7 +85,8 @@ class TestPSAGenerator(unittest.TestCase):
 
     def test_full_pipeline_mocked(self):
         # Generate a small dataset (e.g. 50 pairs, 10 per domain)
-        generator = PSAGenerator(size=50, translator=self.mock_translator)
+        test_checkpoint = os.path.join(self.temp_dir, "test_checkpoint.json")
+        generator = PSAGenerator(size=50, translator=self.mock_translator, checkpoint_file=test_checkpoint)
         records = generator.generate_and_translate()
         
         self.assertEqual(len(records), 50)
