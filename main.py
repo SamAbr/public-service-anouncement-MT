@@ -1,11 +1,11 @@
 import argparse
 import sys
 import os
-from config import DEFAULT_SIZE, OUTPUT_FILE, BATCH_SIZE, RANDOM_SEED, MODEL_NAME
-from utils import set_seed
-from generator import PSAGenerator
-from exporter import Exporter
-from translator import NLLBTranslator
+from src.config import DEFAULT_SIZE, OUTPUT_FILE, BATCH_SIZE, RANDOM_SEED, MODEL_NAME
+from src.utils import set_seed
+from src.generator import PSAGenerator
+from src.exporter import Exporter
+from src.translator import NLLBTranslator
 
 def check_dependencies():
     """Checks if the required ML packages are installed."""

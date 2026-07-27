@@ -1,17 +1,17 @@
 import os
 import json
 import random
-from config import DOMAINS, MIN_WORDS, MAX_WORDS, CHECKPOINT_FILE
-from grammar import ControlledGrammarEngine
-from deduplicator import Deduplicator
-from validator import ValidationEngine
-from translator import NLLBTranslator
+from .config import DOMAINS, MIN_WORDS, MAX_WORDS, CHECKPOINT_FILE
+from .grammar import ControlledGrammarEngine
+from .deduplicator import Deduplicator
+from .validator import ValidationEngine
+from .translator import NLLBTranslator
 
 # Import templates
-from templates import education, agriculture, governance, health, security
+from .templates import education, agriculture, governance, health, security
 
 # Import knowledge base
-from knowledge import institutions, audiences, actions, hazards, locations, terminology
+from .knowledge import institutions, audiences, actions, hazards, locations, terminology
 
 class PSAGenerator:
     def __init__(self, size=50000, translator=None, checkpoint_file=None):

@@ -2,12 +2,12 @@ import unittest
 import os
 import shutil
 import tempfile
-from config import DOMAINS
-from grammar import ControlledGrammarEngine
-from deduplicator import Deduplicator
-from validator import ValidationEngine
-from exporter import Exporter
-from generator import PSAGenerator
+from src.config import DOMAINS
+from src.grammar import ControlledGrammarEngine
+from src.deduplicator import Deduplicator
+from src.validator import ValidationEngine
+from src.exporter import Exporter
+from src.generator import PSAGenerator
 
 class MockTranslator:
     def __init__(self, batch_size=32):

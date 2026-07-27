@@ -1,8 +1,8 @@
 import os
 import argparse
-from config import DEFAULT_SIZE, RANDOM_SEED
-from utils import set_seed
-from generator import PSAGenerator
+from src.config import DEFAULT_SIZE, RANDOM_SEED
+from src.utils import set_seed
+from src.generator import PSAGenerator
 import pandas as pd
 
 def main():
