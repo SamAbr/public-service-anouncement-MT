@@ -4,6 +4,14 @@ An optimized, modular pipeline designed to generate a dataset of over 50,000 hig
 
 ---
 
+## 📊 Datasets
+
+The pre-generated datasets are directly available in the repository:
+*   [output/english_psas.csv](file:///C:/Users/Admin/.gemini/antigravity-ide/scratch/psa_generator/output/english_psas.csv) (50,000 generated unique English announcements).
+*   [output/psa_parallel_dataset.csv](file:///C:/Users/Admin/.gemini/antigravity-ide/scratch/psa_generator/output/psa_parallel_dataset.csv) (The final 50,000 parallel English-Swahili dataset ready for training).
+
+---
+
 ## 🚀 How it Works
 
 The pipeline splits generation and translation to maximize performance while remaining **100% free**:
