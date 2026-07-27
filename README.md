@@ -25,34 +25,43 @@ The pipeline splits generation and translation to maximize performance while rem
 ```
 psa_generator/
 │
-├── main.py                # Local generator CLI entry point
-├── config.py              # Configuration settings (dataset size, paths, thresholds)
-├── generator.py           # Core orchestrator for unique English generation
-├── grammar.py             # Controlled grammar engine (combining sentence slots)
-├── validator.py           # Enforces length (25-60 words) and formal styling rules
-├── deduplicator.py        # Prevents exact and near-duplicate text generation
-├── exporter.py            # Randomly interleaves rows across domains to prevent blocking
-├── utils.py               # Shared helpers (e.g., seeding for reproducibility)
-│
-├── templates/             # Domain-specific controlled sentence structures
-│   ├── education.py
-│   ├── agriculture.py
-│   ├── governance.py
-│   ├── health.py
-│   └── security.py
-│
-├── knowledge/             # Structured lists of entities, locations, and actions
-│   ├── institutions.py    # Official Kenyan institutions (HELB, NTSA, KEPHIS, etc.)
-│   ├── audiences.py       # Domain-specific target groups
-│   ├── actions.py         # Standard directives and advice clauses
-│   ├── hazards.py         # Context issues (phishing, flash floods, cholera, etc.)
-│   ├── locations.py       # Kenyan geographical context locations
-│   └── terminology.py     # Keyword vocabulary
-│
-├── translate_colab.py     # GPU-accelerated NLLB translation script (for Colab)
+├── main.py                  # Local generator CLI entry point
 ├── generate_english_only.py # Script to output raw English CSV for upload
-├── test_generator.py      # Automated unit testing suite
-└── requirements.txt       # Project python dependencies
+├── translate_colab.py       # GPU-accelerated NLLB translation script (for Colab)
+├── test_generator.py        # Automated unit testing suite
+├── requirements.txt         # Project python dependencies
+│
+├── src/                     # Core codebase package
+│   ├── __init__.py          # Package initializer
+│   ├── config.py            # Configuration settings (dataset size, paths, thresholds)
+│   ├── generator.py         # Core orchestrator for unique English generation
+│   ├── grammar.py           # Controlled grammar engine (combining sentence slots)
+│   ├── validator.py         # Enforces length (25-60 words) and formal styling rules
+│   ├── deduplicator.py      # Prevents exact and near-duplicate text generation
+│   ├── exporter.py          # Randomly interleaves rows across domains to prevent blocking
+│   ├── translator.py        # NLLB local/cloud translation wrapper
+│   ├── utils.py             # Shared helpers (e.g., seeding for reproducibility)
+│   │
+│   ├── templates/           # Domain-specific controlled sentence structures
+│   │   ├── __init__.py
+│   │   ├── education.py
+│   │   ├── agriculture.py
+│   │   ├── governance.py
+│   │   ├── health.py
+│   │   └── security.py
+│   │
+│   └── knowledge/           # Structured lists of entities, locations, and actions
+│       ├── __init__.py
+│       ├── domains.py       # Domain definitions mapping
+│       ├── institutions.py  # Official Kenyan institutions (HELB, NTSA, KEPHIS, etc.)
+│       ├── audiences.py     # Domain-specific target groups
+│       ├── actions.py       # Standard directives and advice clauses
+│       ├── hazards.py       # Context issues (phishing, flash floods, cholera, etc.)
+│       ├── locations.py     # Kenyan geographical context locations
+│       └── terminology.py   # Keyword vocabulary
+└── output/
+    ├── english_psas.csv     # Pre-generated raw English announcements
+    └── psa_parallel_dataset.csv # Final Swahili-English parallel dataset
 ```
 
 ---
