@@ -11,8 +11,6 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Data outputs & checkpoints
-output/
-*.csv
 *.json
 
 # IDE and system files
