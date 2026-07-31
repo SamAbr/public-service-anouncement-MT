@@ -13,7 +13,8 @@ class ValidationEngine:
         self.min_words = min_words
         self.max_words = max_words
         self.embedding_model = None
-        self.seen_embeddings = []
+        self.seen_embeddings = None
+        self.seen_count = 0
         
         if HAS_SENTENCE_TRANSFORMERS:
             try:
@@ -67,7 +68,7 @@ class ValidationEngine:
 
     def is_semantically_unique(self, text: str, threshold: float = 0.92) -> bool:
         """
-        Computes semantic similarity using SentenceTransformer.
+        Computes semantic similarity using SentenceTransformer with pre-allocated numpy BLAS dot product.
         Falls back to token Jaccard similarity if SentenceTransformer is unavailable.
         """
         if not text:
@@ -75,25 +76,30 @@ class ValidationEngine:
             
         if HAS_SENTENCE_TRANSFORMERS and self.embedding_model is not None:
             try:
-                new_emb = self.embedding_model.encode(text, convert_to_tensor=True)
-                if not self.seen_embeddings:
-                    self.seen_embeddings.append(new_emb)
+                # encode returning L2-normalized numpy array
+                new_emb = self.embedding_model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
+                
+                if self.seen_embeddings is None:
+                    # Pre-allocate large matrix for up to 55,000 embeddings (size of all-MiniLM-L6-v2 is 384)
+                    self.seen_embeddings = np.zeros((55000, 384), dtype=np.float32)
+                    self.seen_embeddings[0] = new_emb
+                    self.seen_count = 1
                     return True
                     
-                # Compute cosine similarities against all previous sentences
-                # seen_embeddings is a list of tensors, stack them for parallel computation
-                stacked = torch.stack(self.seen_embeddings)
-                similarities = util.cos_sim(new_emb, stacked)[0]
-                max_sim = torch.max(similarities).item()
+                # Compute cosine similarities (dot product since normalized)
+                similarities = np.dot(self.seen_embeddings[:self.seen_count], new_emb)
+                max_sim = np.max(similarities)
                 
                 if max_sim > threshold:
                     return False
                 
-                # Append to our list of cache
-                self.seen_embeddings.append(new_emb)
+                # Append to our pre-allocated array
+                if self.seen_count < len(self.seen_embeddings):
+                    self.seen_embeddings[self.seen_count] = new_emb
+                    self.seen_count += 1
                 return True
             except Exception as e:
-                # Fallback to Jaccard if tensor operation fails
+                # Fallback to Jaccard if operation fails
                 pass
                 
         # Fallback: Character/Token Jaccard Similarity
