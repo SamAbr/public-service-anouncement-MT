@@ -28,9 +28,6 @@ def main():
     df = pd.DataFrame(english_records)
     df.to_csv(args.output, index=False, encoding="utf-8")
     print(f"Saved {len(df)} English records to {args.output}")
-    print("\nNext steps:")
-    print("1. Upload this file ('english_psas.csv') and 'translate_colab.py' to your Google Colab workspace.")
-    print("2. Run the Colab notebook using GPU acceleration.")
 
 if __name__ == "__main__":
     main()
