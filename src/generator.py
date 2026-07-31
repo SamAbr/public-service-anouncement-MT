@@ -143,15 +143,6 @@ class PSAGenerator:
                     
                     for record in batch_records:
                         english_text = record["English"]
-                        # Realism validation
-                        is_valid, reason = self.validator.validate(english_text)
-                        if not is_valid:
-                            continue
-                            
-                        # Semantic Similarity check
-                        if not self.validator.is_semantically_unique(english_text, threshold=0.92):
-                            continue
-                            
                         # Success: Register metrics & build record
                         self.stats["domain"][domain] += 1
                         self.stats["scenario_id"][scenario.id] += 1
