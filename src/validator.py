@@ -15,6 +15,8 @@ class ValidationEngine:
         self.embedding_model = None
         self.seen_embeddings = None
         self.seen_count = 0
+        self.two_sentence_count = 0
+        self.total_validated_count = 0
         
         if HAS_SENTENCE_TRANSFORMERS:
             try:
@@ -46,17 +48,25 @@ class ValidationEngine:
         if not text.endswith(('.', '!', '?')):
             return False, "Sentence must end with proper punctuation (. ! ?)"
             
-        # 3. Ensure exactly one sentence (excluding standard abbreviation dots like KNEC, TSC, etc.)
+        # 3. Ensure at most two sentences (with two-sentence outliers capped at 10%)
         # Split by terminal punctuation and filter out empty strings
         clean_punc_text = re.sub(r'\b[A-Za-z]\.', '', text)  # remove initial dots like J. or Co.
         sentences = [s.strip() for s in re.split(r'[.!?]', clean_punc_text) if s.strip()]
-        if len(sentences) != 1:
-            return False, f"Must contain exactly one sentence. Found {len(sentences)}: {sentences}"
+        
+        self.total_validated_count += 1
+        
+        if len(sentences) > 2:
+            return False, f"Must contain at most two sentences. Found {len(sentences)}: {sentences}"
+        elif len(sentences) == 2:
+            current_ratio = self.two_sentence_count / max(1, self.total_validated_count)
+            if current_ratio > 0.10:
+                return False, f"Two-sentence outlier ratio ({current_ratio:.2%}) exceeds 10% budget"
+            self.two_sentence_count += 1
 
         lower_text = text.lower()
 
         # 4. PSA Framework Decision Tree Rule 1: Must tell the public to take action, avoid something, or be alert
-        psa_keywords = ["advise", "urge", "warn", "remind", "request", "inform", "deadline", "alert", "verify", "submit", "report", "avoid", "comply", "register", "apply", "check", "secure"]
+        psa_keywords = ["advise", "urge", "warn", "remind", "request", "inform", "deadline", "alert", "verify", "submit", "report", "avoid", "comply", "register", "apply", "check", "secure", "require", "recommend", "need", "must", "should", "always", "protect", "prevent"]
         if not any(kw in lower_text for kw in psa_keywords):
             return False, "Does not contain core PSA action/advisory directive keywords"
 

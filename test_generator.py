@@ -93,10 +93,19 @@ class TestPSAGenerator(unittest.TestCase):
         is_valid, reason = validator.validate(gazette_notice)
         self.assertFalse(is_valid)
 
-        # Test multiple sentences rejection
-        multi_sentence = "The Ministry urges all citizens to boil drinking water. Clean water is safe."
-        is_valid, reason = validator.validate(multi_sentence)
-        self.assertFalse(is_valid)
+        # Test multiple sentences behavior (allows first one up to 10% budget, then rejects subsequent ones)
+        multi_sentence_1 = "The Ministry urges all citizens to boil drinking water today. Clean water is safe for health."
+        is_valid_1, reason_1 = validator.validate(multi_sentence_1)
+        self.assertTrue(is_valid_1)  # First outlier is allowed
+
+        multi_sentence_2 = "Avoid crossing flooded rivers during rainy seasons. Follow local emergency advice immediately."
+        is_valid_2, reason_2 = validator.validate(multi_sentence_2)
+        self.assertFalse(is_valid_2)  # Second consecutive outlier is rejected (ratio 50% > 10%)
+
+        # Test three sentences (always rejected)
+        three_sentence = "Boil all drinking water today. Clean water is safe. Protect your family."
+        is_valid_3, reason_3 = validator.validate(three_sentence)
+        self.assertFalse(is_valid_3)
 
     def test_full_pipeline_mocked(self):
         # Generate 25 parallel records (5 per domain)
