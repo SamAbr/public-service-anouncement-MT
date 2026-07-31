@@ -63,12 +63,13 @@ def main():
     else:
         print(f"Initializing new parallel dataset from '{args.input}'")
         df = pd.read_csv(args.input)
-        # Ensure target columns exist
-        for col in ["Kiswahili", "Somali", "Luo", "is_synthetic", "model_version", "template_id"]:
-            if col not in df.columns:
-                df[col] = ""
-        df["is_synthetic"] = True
-        df["model_version"] = "NLLB-200"
+        
+    # Ensure target columns exist in the DataFrame (handles upgrading older CSV formats)
+    for col in ["Kiswahili", "Somali", "Luo", "is_synthetic", "model_version", "template_id"]:
+        if col not in df.columns:
+            df[col] = ""
+    df["is_synthetic"] = True
+    df["model_version"] = "NLLB-200"
 
     # We need template_id from inputs if it exists, otherwise placeholder
     if "template_id" not in df.columns:
