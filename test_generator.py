@@ -61,14 +61,14 @@ class TestPSAGenerator(unittest.TestCase):
         self.assertNotIn("[boil]", psa)  # Verify bracketed verb synonymized
 
     def test_validation_engine(self):
-        validator = ValidationEngine(min_words=10, max_words=45)
+        validator = ValidationEngine(min_words=10, max_words=25)
         
-        # Test valid sentence (length within limits, capitalization, ends in punctuation)
+        # Test valid sentence (length within limits, capitalization, ends in punctuation, contains PSA keywords)
         valid_text = "The Ministry of Health advises all citizens to boil drinking water today in sub-counties."
         is_valid, reason = validator.validate(valid_text)
         self.assertTrue(is_valid, f"Failed validation: {reason}")
         
-        # Test short text (12-40 default, but here 10-45)
+        # Test short text (10-25, "Wash hands." is too short)
         short_text = "Wash hands."
         is_valid, reason = validator.validate(short_text)
         self.assertFalse(is_valid)
@@ -81,6 +81,21 @@ class TestPSAGenerator(unittest.TestCase):
         # Test double modifiers
         duplicate_mod = "The Ministry urges all citizens to boil water immediately and immediately go to clinic."
         is_valid, reason = validator.validate(duplicate_mod)
+        self.assertFalse(is_valid)
+
+        # Test Press Release rejection
+        press_release = "The Cabinet Secretary launched a new national vaccination drive at the Ministry headquarters."
+        is_valid, reason = validator.validate(press_release)
+        self.assertFalse(is_valid)
+
+        # Test Gazette Notice rejection
+        gazette_notice = "Pursuant to section 5, the general public is notified of registration guidelines."
+        is_valid, reason = validator.validate(gazette_notice)
+        self.assertFalse(is_valid)
+
+        # Test multiple sentences rejection
+        multi_sentence = "The Ministry urges all citizens to boil drinking water. Clean water is safe."
+        is_valid, reason = validator.validate(multi_sentence)
         self.assertFalse(is_valid)
 
     def test_full_pipeline_mocked(self):

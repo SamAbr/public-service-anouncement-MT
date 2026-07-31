@@ -9,7 +9,7 @@ except ImportError:
     HAS_SENTENCE_TRANSFORMERS = False
 
 class ValidationEngine:
-    def __init__(self, min_words=12, max_words=40):
+    def __init__(self, min_words=10, max_words=25):
         self.min_words = min_words
         self.max_words = max_words
         self.embedding_model = None
@@ -25,7 +25,7 @@ class ValidationEngine:
 
     def validate(self, text: str, domain: str = None) -> tuple:
         """
-        Runs Realism Validator rules on the generated PSA.
+        Runs PSA Framework Decision Tree and Realism rules on the generated PSA.
         Returns (is_valid, reason)
         """
         if not text or not isinstance(text, str):
@@ -35,7 +35,7 @@ class ValidationEngine:
         words = text.split()
         word_count = len(words)
         
-        # 1. Word count constraint (12 to 40 words)
+        # 1. Word count constraint (10 to 25 words)
         if word_count < self.min_words or word_count > self.max_words:
             return False, f"Word count ({word_count}) is outside range [{self.min_words}, {self.max_words}]"
             
@@ -46,21 +46,45 @@ class ValidationEngine:
         if not text.endswith(('.', '!', '?')):
             return False, "Sentence must end with proper punctuation (. ! ?)"
             
-        # 3. Prevent duplicated modifiers / words
-        # E.g. "immediately ... immediately" or "online ... online"
+        # 3. Ensure exactly one sentence (excluding standard abbreviation dots like KNEC, TSC, etc.)
+        # Split by terminal punctuation and filter out empty strings
+        clean_punc_text = re.sub(r'\b[A-Za-z]\.', '', text)  # remove initial dots like J. or Co.
+        sentences = [s.strip() for s in re.split(r'[.!?]', clean_punc_text) if s.strip()]
+        if len(sentences) != 1:
+            return False, f"Must contain exactly one sentence. Found {len(sentences)}: {sentences}"
+
         lower_text = text.lower()
+
+        # 4. PSA Framework Decision Tree Rule 1: Must tell the public to take action, avoid something, or be alert
+        psa_keywords = ["advise", "urge", "warn", "remind", "request", "inform", "deadline", "alert", "verify", "submit", "report", "avoid", "comply", "register", "apply", "check", "secure"]
+        if not any(kw in lower_text for kw in psa_keywords):
+            return False, "Does not contain core PSA action/advisory directive keywords"
+
+        # 5. PSA Framework Decision Tree Rule 2: Reject Press Release Style (events, launches, CS statements)
+        press_release_keywords = ["launch", "inaugurated", "cabinet secretary", "official visit", "media invited", "press release", "meeting today", "announced that", "held a meeting", "CS "]
+        for prw in press_release_keywords:
+            if prw in lower_text:
+                return False, f"Contains Press Release style keyword/content: '{prw}'"
+
+        # 6. PSA Framework Decision Tree Rule 3: Reject Gazette / Legal Notice Style (legal/administrative Notice)
+        gazette_keywords = ["gazette notice", "tender no", "pursuant to", "in exercise of the powers", "hereby notifies", "failure to comply", "hereby instructs"]
+        for gzw in gazette_keywords:
+            if gzw in lower_text:
+                return False, f"Contains Gazette Notice style keyword/content: '{gzw}'"
+
+        # 7. Prevent duplicated modifiers / words
         duplicate_words = ["immediately", "promptly", "urgently", "online", "portal", "official"]
         for dw in duplicate_words:
             if len(re.findall(rf"\b{dw}\b", lower_text)) > 1:
                 return False, f"Duplicate modifier detected: '{dw}'"
                 
-        # 4. Refuse informal terms
+        # 8. Refuse informal terms
         informal_words = ["hey", "yeah", "gonna", "wanna", "lol", "brb", "cool", "guys"]
         for word in informal_words:
             if re.search(rf"\b{word}\b", lower_text):
                 return False, f"Contains informal language: '{word}'"
                 
-        # 5. Clean spacing
+        # 9. Clean spacing
         if "  " in text:
             return False, "Contains consecutive double spaces"
             
