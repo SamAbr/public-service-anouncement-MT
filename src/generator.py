@@ -58,14 +58,40 @@ class PSAGenerator:
             while count < self.target_per_domain and attempts < max_attempts:
                 attempts += 1
                 
-                # Pick a random template index to include in slots for deduplication
+                # 1. Pick a random template index
                 template_idx = random.randint(0, len(domain_templates.TEMPLATES) - 1)
                 
-                # We also track slot combinations to prevent near-duplicates
-                inst = random.choice(insts)
+                # 2. Pick a thematic tag from the elements in the domain lists (excluding "general" if possible)
+                all_tags = set()
+                for items in [insts, acts, hazs]:
+                    for item in items:
+                        if isinstance(item, tuple) and len(item) > 1:
+                            all_tags.update(item[1])
+                specific_tags = all_tags - {"general"}
+                chosen_tag = random.choice(list(specific_tags)) if specific_tags else (random.choice(list(all_tags)) if all_tags else None)
+
+                # Helper to filter items by the selected tag
+                def filter_by_tag(item_list, tag):
+                    if not tag:
+                        return [item[0] if isinstance(item, tuple) else item for item in item_list]
+                    filtered = []
+                    for item in item_list:
+                        if isinstance(item, tuple):
+                            if tag in item[1] or "general" in item[1]:
+                                filtered.append(item[0])
+                        else:
+                            filtered.append(item)
+                    return filtered if filtered else [item[0] if isinstance(item, tuple) else item for item in item_list]
+
+                filtered_insts = filter_by_tag(insts, chosen_tag)
+                filtered_acts = filter_by_tag(acts, chosen_tag)
+                filtered_hazs = filter_by_tag(hazs, chosen_tag)
+
+                # 3. Select coherent slots
+                inst = random.choice(filtered_insts)
                 aud = random.choice(auds)
-                act = random.choice(acts)
-                haz = random.choice(hazs)
+                act = random.choice(filtered_acts)
+                haz = random.choice(filtered_hazs)
                 loc = random.choice(locs)
                 
                 # Follow up (70% probability)
@@ -74,16 +100,16 @@ class PSAGenerator:
                 
                 slot_combination = (domain, template_idx, inst, aud, act, haz, loc, follow_up_idx)
                 
-                # Generate sentence
+                # Generate sentence (we pass single-item lists to guarantee slot_combination matches the generated text)
                 english_text = self.grammar_engine.generate_psa(
                     templates=domain_templates.TEMPLATES,
                     openings=domain_templates.OPENINGS,
                     follow_ups=domain_templates.FOLLOW_UPS,
-                    institutions=insts,
-                    audiences=auds,
-                    actions=acts,
-                    hazards=hazs,
-                    locations=locs,
+                    institutions=[inst],
+                    audiences=[aud],
+                    actions=[act],
+                    hazards=[haz],
+                    locations=[loc],
                     terminologies=terms
                 )
                 
@@ -107,7 +133,13 @@ class PSAGenerator:
                     "PSA_Id": psa_id,
                     "Domain": domain,
                     "Class": "PSA",
-                    "English": english_text
+                    "English": english_text,
+                    "Kiswahili": "",
+                    "Somali": "",
+                    "Luo": "",
+                    "is_synthetic": True,
+                    "model_version": "NLLB-200",
+                    "template_id": f"T_{domain_prefix}_{template_idx}"
                 })
                 count += 1
                 
@@ -120,67 +152,82 @@ class PSAGenerator:
         Coordinates the full pipeline:
         1. Generate English PSAs.
         2. Resume from checkpoint if it exists.
-        3. Translate in batches with NLLB-200.
+        3. Translate Swahili, Somali, and Luo sequentially.
         4. Save/checkpoint progress.
         """
         # Step 1: Generate or load English PSAs
-        english_records = self.generate_english_psas()
-        total_to_translate = len(english_records)
+        records = self.generate_english_psas()
+        total_to_translate = len(records)
         print(f"Total English PSAs generated: {total_to_translate}")
         
         # Step 2: Check for checkpoint
-        translated_records = []
-        start_idx = 0
+        checkpoint_states = {
+            "Kiswahili": 0,
+            "Somali": 0,
+            "Luo": 0
+        }
         
         if os.path.exists(self.checkpoint_file):
             try:
                 with open(self.checkpoint_file, 'r', encoding='utf-8') as f:
                     checkpoint = json.load(f)
-                    translated_records = checkpoint.get("records", [])
-                    start_idx = checkpoint.get("next_index", 0)
-                    print(f"Resuming from checkpoint. Already translated {start_idx}/{total_to_translate} records.")
+                    records = checkpoint.get("records", records)
+                    checkpoint_states = checkpoint.get("checkpoint_states", checkpoint_states)
+                    print(f"Resuming translation. Current indices: {checkpoint_states}")
             except Exception as e:
                 print(f"Could not read checkpoint file: {e}. Starting fresh.")
                 
-        # If the generated size is different or we start fresh, reset
-        if start_idx >= total_to_translate:
-            print("Checkpoint matches or exceeds generated size. Completed.")
-            return translated_records
-            
-        # Step 3: Run translation
-        print("Initializing translator...")
-        self.translator.load_model()
+        # Define NLLB model mapping per target language
+        targets = [
+            ("Kiswahili", "swh_Latn", "facebook/nllb-200-distilled-600M"),
+            ("Somali", "som_Latn", "facebook/nllb-200-1.3B"),
+            ("Luo", "luo_Latn", "facebook/nllb-200-1.3B")
+        ]
         
-        batch_size = self.translator.batch_size
-        english_texts = [r["English"] for r in english_records]
-        
-        # Translate remaining in batches
-        for i in range(start_idx, total_to_translate, batch_size):
-            end_idx = min(i + batch_size, total_to_translate)
-            batch_texts = english_texts[i:end_idx]
-            
-            # Translate batch
-            batch_translations = self.translator.translate_batch(batch_texts)
-            
-            # Save translated records
-            for idx, translation in enumerate(batch_translations):
-                record_idx = i + idx
-                record = english_records[record_idx].copy()
-                record["Kiswahili"] = translation
-                translated_records.append(record)
+        # Step 3: Run translation sequentially per language
+        for col_name, lang_code, model_name in targets:
+            start_idx = checkpoint_states.get(col_name, 0)
+            if start_idx >= total_to_translate:
+                print(f"Skipping {col_name}: Fully translated.")
+                continue
                 
-            # Write checkpoint
-            checkpoint_data = {
-                "records": translated_records,
-                "next_index": end_idx
-            }
-            with open(self.checkpoint_file, 'w', encoding='utf-8') as f:
-                json.dump(checkpoint_data, f, ensure_ascii=False, indent=2)
-                
-            print(f"Translated and checkpointed up to index {end_idx}/{total_to_translate}...")
+            print(f"\n=== Translating to {col_name} using model {model_name} (from index {start_idx}) ===")
             
-        # Remove checkpoint file on successful completion
+            # Load translation model
+            self.translator.load_model(model_name=model_name)
+            batch_size = self.translator.batch_size
+            
+            english_texts = [r["English"] for r in records]
+            
+            for i in range(start_idx, total_to_translate, batch_size):
+                end_idx = min(i + batch_size, total_to_translate)
+                batch_texts = english_texts[i:end_idx]
+                
+                # Translate batch
+                batch_translations = self.translator.translate_batch(batch_texts, tgt_lang=lang_code)
+                
+                # Update records in place
+                for idx, translation in enumerate(batch_translations):
+                    record_idx = i + idx
+                    records[record_idx][col_name] = translation
+                    
+                # Update checkpoint state
+                checkpoint_states[col_name] = end_idx
+                checkpoint_data = {
+                    "records": records,
+                    "checkpoint_states": checkpoint_states
+                }
+                
+                with open(self.checkpoint_file, 'w', encoding='utf-8') as f:
+                    json.dump(checkpoint_data, f, ensure_ascii=False, indent=2)
+                    
+                print(f"Translated {col_name} and checkpointed up to index {end_idx}/{total_to_translate}...")
+                
+            # Unload model to release GPU memory before loading the next one
+            self.translator.unload_model()
+            
+        # Remove checkpoint file on successful completion of all languages
         if os.path.exists(self.checkpoint_file):
             os.remove(self.checkpoint_file)
             
-        return translated_records
+        return records

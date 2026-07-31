@@ -13,12 +13,19 @@ class MockTranslator:
     def __init__(self, batch_size=32):
         self.batch_size = batch_size
 
-    def load_model(self):
+    def load_model(self, model_name=None):
         pass
 
-    def translate_batch(self, texts):
-        # Mock translate by appending " - Swahili Translation"
-        return [f"{text} - Swahili Translation" for text in texts]
+    def unload_model(self):
+        pass
+
+    def translate_batch(self, texts, tgt_lang=None):
+        suffix = " - Swahili Translation"
+        if tgt_lang == "som_Latn":
+            suffix = " - Somali Translation"
+        elif tgt_lang == "luo_Latn":
+            suffix = " - Luo Translation"
+        return [f"{text}{suffix}" for text in texts]
 
 class TestPSAGenerator(unittest.TestCase):
     def setUp(self):
@@ -98,7 +105,14 @@ class TestPSAGenerator(unittest.TestCase):
             self.assertEqual(record["Class"], "PSA")
             self.assertIn("English", record)
             self.assertIn("Kiswahili", record)
+            self.assertIn("Somali", record)
+            self.assertIn("Luo", record)
             self.assertTrue(record["Kiswahili"].endswith("- Swahili Translation"))
+            self.assertTrue(record["Somali"].endswith("- Somali Translation"))
+            self.assertTrue(record["Luo"].endswith("- Luo Translation"))
+            self.assertEqual(record["is_synthetic"], True)
+            self.assertEqual(record["model_version"], "NLLB-200")
+            self.assertTrue(record["template_id"].startswith("T_"))
             
         # Export
         exporter = Exporter(self.output_csv)

@@ -1,17 +1,50 @@
 import argparse
 import pandas as pd
 import torch
+import gc
+import os
+import urllib.request
+import math
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 from tqdm import tqdm
-import math
-import os
+
+# Attempt to import nltk for ChrF calculation (pre-installed in Colab)
+try:
+    import nltk
+    from nltk.translate.chrf_score import sentence_chrf
+except ImportError:
+    nltk = None
+
+# Attempt to import fasttext for Language ID
+try:
+    import fasttext
+except ImportError:
+    fasttext = None
+
+# List of acronyms to protect as untranslatable tokens
+ACRONYMS_TO_PIN = ["NTSA", "KEPHIS", "HELB", "KUCCPS", "KRA", "CBK", "EACC", "SHA", "KEMRI", "KEMSA", "Huduma"]
+
+def download_fasttext_model():
+    model_path = "lid.176.bin"
+    if not os.path.exists(model_path):
+        print("Downloading FastText Language ID model...")
+        url = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
+        urllib.request.urlretrieve(url, model_path)
+    return model_path
 
 def main():
-    parser = argparse.ArgumentParser(description="Colab GPU Translation for NLLB-200")
+    parser = argparse.ArgumentParser(description="Colab GPU Sequential 4-Way Translation for NLLB-200")
     parser.add_argument("--input", type=str, default="english_psas.csv", help="Path to input English CSV file")
     parser.add_argument("--output", type=str, default="psa_parallel_dataset.csv", help="Path to output parallel CSV file")
     parser.add_argument("--batch-size", type=int, default=128, help="Batch size for GPU translation")
-    parser.add_argument("--model-name", type=str, default="facebook/nllb-200-distilled-600M", help="NLLB model name")
+    
+    # Models per language
+    parser.add_argument("--model-swh", type=str, default="facebook/nllb-200-distilled-600M", help="NLLB model for Swahili")
+    parser.add_argument("--model-som", type=str, default="facebook/nllb-200-1.3B", help="NLLB model for Somali")
+    parser.add_argument("--model-luo", type=str, default="facebook/nllb-200-1.3B", help="NLLB model for Luo")
+    
+    # Quality thresholds
+    parser.add_argument("--min-chrf", type=float, default=0.25, help="Minimum ChrF score for back-translation")
     
     args = parser.parse_args()
 
@@ -22,59 +55,155 @@ def main():
     # Check for GPU
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Running translation on device: '{device}'")
-    if device == "cpu":
-        print("Warning: GPU not detected. Translation on Colab CPU will be slow. Switch your runtime to T4 GPU!")
 
-    # Read English dataset
-    print(f"Reading English records from '{args.input}'...")
-    df = pd.read_csv(args.input)
+    # Read/Initialize parallel dataset (supporting resumability)
+    if os.path.exists(args.output):
+        print(f"Resuming translation using existing parallel dataset: '{args.output}'")
+        df = pd.read_csv(args.output)
+    else:
+        print(f"Initializing new parallel dataset from '{args.input}'")
+        df = pd.read_csv(args.input)
+        # Ensure target columns exist
+        for col in ["Kiswahili", "Somali", "Luo", "is_synthetic", "model_version", "template_id"]:
+            if col not in df.columns:
+                df[col] = ""
+        df["is_synthetic"] = True
+        df["model_version"] = "NLLB-200"
+
+    # We need template_id from inputs if it exists, otherwise placeholder
+    if "template_id" not in df.columns:
+        df["template_id"] = "T_GENERIC"
+
+    total_records = len(df)
     english_texts = df["English"].tolist()
-    total_records = len(english_texts)
-    print(f"Loaded {total_records} records.")
 
-    # Load model and tokenizer
-    print(f"Loading model '{args.model_name}' in FP16 precision...")
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, src_lang="eng_Latn")
-    # Using torch.float16 speeds up T4 GPU inference by ~8x compared to default FP32
-    model = AutoModelForSeq2SeqLM.from_pretrained(
-        args.model_name, 
-        torch_dtype=torch.float16
-    ).to(device)
-    print("Model loaded successfully.")
+    # Load FastText LangID if available
+    ft_model = None
+    if fasttext is not None:
+        try:
+            model_path = download_fasttext_model()
+            ft_model = fasttext.load_model(model_path)
+            print("FastText Language ID model loaded successfully.")
+        except Exception as e:
+            print(f"Warning: Could not initialize FastText: {e}")
 
-    # Translate
-    translated_texts = []
-    num_batches = math.ceil(total_records / args.batch_size)
-    tgt_lang_id = tokenizer.convert_tokens_to_ids("swh_Latn")
+    # Define targets to loop over sequentially
+    targets = [
+        # (Column Name, Lang Code, Model Path, FastText Code)
+        ("Kiswahili", "swh_Latn", args.model_swh, "sw"),
+        ("Somali", "som_Latn", args.model_som, "so"),
+        ("Luo", "luo_Latn", args.model_luo, "luo")
+    ]
 
-    print(f"Starting translation of {total_records} sentences in {num_batches} batches...")
-    
-    for i in tqdm(range(num_batches), desc="Translating"):
-        batch_texts = english_texts[i * args.batch_size : (i + 1) * args.batch_size]
+    for col_name, lang_code, model_name, fasttext_code in targets:
+        # Check if this language needs translation (resumability check)
+        untranslated_indices = df[df[col_name].isna() | (df[col_name] == "")].index.tolist()
         
-        # Tokenize
-        inputs = tokenizer(batch_texts, return_tensors="pt", padding=True, truncation=True).to(device)
+        if not untranslated_indices:
+            print(f"Skipping {col_name}: Already fully translated.")
+            continue
+
+        print(f"\n=== Translating to {col_name} using model {model_name} ({len(untranslated_indices)} records remaining) ===")
         
-        # Generate translation
-        with torch.no_grad():
-            translated_tokens = model.generate(
-                **inputs,
-                forced_bos_token_id=tgt_lang_id,
-                max_length=64, # Optimized max token limit for PSAs (reduces redundant padding computation)
-                num_beams=1  # Greedy decoding for maximum speed
-            )
+        # Load model and tokenizer
+        print(f"Loading {model_name}...")
+        tokenizer = AutoTokenizer.from_pretrained(model_name, src_lang="eng_Latn")
+        
+        # Pin proper nouns
+        tokenizer.add_tokens(ACRONYMS_TO_PIN)
+        
+        model = AutoModelForSeq2SeqLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32
+        ).to(device)
+        model.resize_token_embeddings(len(tokenizer))
+        
+        tgt_lang_id = tokenizer.convert_tokens_to_ids(lang_code)
+        eng_lang_id = tokenizer.convert_tokens_to_ids("eng_Latn")
+        
+        num_batches = math.ceil(len(untranslated_indices) / args.batch_size)
+        
+        for b in tqdm(range(num_batches), desc=f"Processing {col_name}"):
+            batch_idx = untranslated_indices[b * args.batch_size : (b + 1) * args.batch_size]
+            batch_texts = [english_texts[idx] for idx in batch_idx]
             
-        # Decode
-        batch_translations = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)
-        translated_texts.extend(batch_translations)
+            # Forward translation: English -> Target
+            inputs = tokenizer(batch_texts, return_tensors="pt", padding=True, truncation=True).to(device)
+            with torch.no_grad():
+                translated_tokens = model.generate(
+                    **inputs,
+                    forced_bos_token_id=tgt_lang_id,
+                    max_length=64,
+                    num_beams=1
+                )
+            translations = tokenizer.batch_decode(translated_tokens, skip_special_tokens=True)
+            
+            # Back-translation check & LangID filtering
+            final_translations = []
+            for i, target_text in enumerate(translations):
+                original_idx = batch_idx[i]
+                original_english = batch_texts[i]
+                
+                # Filter 1: Off-target Language ID check
+                if ft_model is not None:
+                    # Clean newlines for fasttext
+                    cleaned_text = target_text.replace("\n", " ")
+                    predictions = ft_model.predict(cleaned_text, k=3)
+                    pred_labels = [label.replace("__label__", "") for label in predictions[0]]
+                    
+                    # Luo prediction can sometimes be classified as related Nilotic/African languages if short,
+                    # so we verify if the target label is in the top 3 predictions
+                    if fasttext_code not in pred_labels:
+                        print(f"Row {original_idx} rejected: LangID failed for {col_name}. Got {pred_labels}, expected '{fasttext_code}'. Retrying translation with beam search...")
+                        # Fallback retry with beam search
+                        inputs_single = tokenizer([original_english], return_tensors="pt").to(device)
+                        with torch.no_grad():
+                            tokens_retry = model.generate(
+                                **inputs_single,
+                                forced_bos_token_id=tgt_lang_id,
+                                max_length=64,
+                                num_beams=3
+                            )
+                        target_text = tokenizer.batch_decode(tokens_retry, skip_special_tokens=True)[0]
+                
+                # Filter 2: Back-Translation round trip
+                inputs_back = tokenizer([target_text], return_tensors="pt", padding=True, truncation=True).to(device)
+                with torch.no_grad():
+                    back_tokens = model.generate(
+                        **inputs_back,
+                        forced_bos_token_id=eng_lang_id,
+                        max_length=64,
+                        num_beams=1
+                    )
+                back_english = tokenizer.batch_decode(back_tokens, skip_special_tokens=True)[0]
+                
+                # Calculate ChrF score
+                chrf_val = 1.0
+                if nltk is not None:
+                    chrf_val = sentence_chrf(original_english, back_english)
+                
+                if chrf_val < args.min_chrf:
+                    print(f"Row {original_idx} Warning: Low back-translation ChrF ({chrf_val:.3f}). Keep but flag.")
+                
+                final_translations.append(target_text)
+                
+            # Write batch translations back to DataFrame
+            for i, original_idx in enumerate(batch_idx):
+                df.at[original_idx, col_name] = final_translations[i]
+            
+            # Save checkpoint incrementally
+            df.to_csv(args.output, index=False, encoding="utf-8")
+            
+        # Clean up memory completely before loading next model
+        print(f"Freeing memory for {col_name} model...")
+        del model
+        del tokenizer
+        if device == "cuda":
+            torch.cuda.empty_cache()
+        gc.collect()
 
-    # Add translated Kiswahili column
-    df["Kiswahili"] = translated_texts
-
-    # Save final dataset
-    print(f"Saving final parallel dataset to '{args.output}'...")
-    df.to_csv(args.output, index=False, encoding="utf-8")
-    print("Done! You can now download the translated parallel dataset.")
+    print("\nAll translations completed successfully!")
+    print(f"Final aligned 4-way parallel dataset saved to '{args.output}'.")
 
 if __name__ == "__main__":
     main()

@@ -1,43 +1,43 @@
 ACTIONS = {
     "Education": [
-        "verify their registration details online before the deadline",
-        "submit their loan and scholarship applications on time",
-        "adhere to the strict examination guidelines to prevent malpractice",
-        "report any instances of exam leakage or cheating via the official portal",
-        "enroll for the new competency-based curriculum teacher training workshops",
-        "update their institution placement profiles through the web portal"
+        ("verify their registration details online before the deadline", {"exams"}),
+        ("submit their loan and scholarship applications on time", {"loans"}),
+        ("adhere to the strict examination guidelines to prevent malpractice", {"exams"}),
+        ("report any instances of exam leakage or cheating via the official portal", {"exams"}),
+        ("enroll for the new competency-based curriculum teacher training workshops", {"teachers"}),
+        ("update their institution placement profiles through the web portal", {"placement"})
     ],
     "Agriculture": [
-        "purchase certified crop seeds and fertilizers only from registered dealers",
-        "vaccinate all their livestock against common seasonal diseases",
-        "adopt modern water harvesting and soil conservation techniques",
-        "report any cases of invasive pests like locusts or fall armyworms immediately",
-        "store harvested grain in dry, cool conditions to prevent aflatoxin contamination",
-        "consult agricultural extension officers regarding current weather forecasts"
+        ("purchase certified crop seeds and fertilizers only from registered dealers", {"crops"}),
+        ("vaccinate all their livestock against common seasonal diseases", {"livestock"}),
+        ("adopt modern water harvesting and soil conservation techniques", {"weather", "crops"}),
+        ("report any cases of invasive pests like locusts or fall armyworms immediately", {"pests"}),
+        ("store harvested grain in dry, cool conditions to prevent aflatoxin contamination", {"crops"}),
+        ("consult agricultural extension officers regarding current weather forecasts", {"weather", "crops", "livestock"})
     ],
     "Security & Safety": [
-        "exercise extreme caution and avoid crossing flooded bridges or rivers",
-        "enable two-factor authentication and secure their online banking credentials",
-        "report suspicious activities or abandoned packages to the police hotline",
-        "check the mechanical condition of their vehicles before embarking on long journeys",
-        "comply with speed limits and road safety rules on all highways",
-        "refrain from sharing unverified news or inflammatory reports online"
+        ("exercise extreme caution and avoid crossing flooded bridges or rivers", {"floods", "weather"}),
+        ("enable two-factor authentication and secure their online banking credentials", {"cyber"}),
+        ("report suspicious activities or abandoned packages to the police hotline", {"safety"}),
+        ("check the mechanical condition of their vehicles before embarking on long journeys", {"road"}),
+        ("comply with speed limits and road safety rules on all highways", {"road"}),
+        ("refrain from sharing unverified news or inflammatory reports online", {"safety", "cyber"})
     ],
     "Governance": [
-        "file their annual income tax returns before the statutory deadline",
-        "update their user profiles and contact details on the eCitizen platform",
-        "report any corruption attempts or demand for bribes in public offices",
-        "register their businesses online to comply with legal regulations",
-        "ensure their personal data handles comply with the data protection act",
-        "pay their land rates and county permits through designated digital channels"
+        ("file their annual tax returns early to avoid the last-minute rush", {"tax"}),
+        ("verify their registration status on the official citizen portal", {"identity"}),
+        ("report any public officials demanding bribes or illegal processing fees", {"corruption"}),
+        ("avoid sharing personal identification numbers or passwords with third parties", {"data"}),
+        ("ensure their biometric details are updated at the nearest service office", {"identity"}),
+        ("verify the security features of all newly issued currency notes", {"general"})
     ],
     "Health": [
-        "boil or treat all drinking water to prevent cholera and other diarrheal diseases",
-        "ensure children under five years receive all scheduled immunization vaccines",
-        "register for the new national health insurance cover to access subsidized treatment",
-        "clear stagnant water around residential plots to eliminate mosquito breeding grounds",
-        "maintain high standards of hygiene and wash hands regularly with soap",
-        "seek immediate medical attention at the nearest facility if experiencing high fever"
+        ("boil all drinking water and maintain strict hygiene standards at home", {"cholera"}),
+        ("register for the social health insurance fund to secure medical coverage", {"insurance"}),
+        ("verify the safety seals and registration numbers on all purchased medicines", {"drugs"}),
+        ("report any unlicensed chemists operating in their local neighborhoods", {"drugs"}),
+        ("visit the nearest public health center for free vaccination and checkups", {"general", "cholera"}),
+        ("adhere to malaria prevention practices by sleeping under treated mosquito nets", {"general"})
     ]
 }
 

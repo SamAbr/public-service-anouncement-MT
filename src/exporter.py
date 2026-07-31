@@ -31,7 +31,7 @@ class Exporter:
         if parent_dir:
             os.makedirs(parent_dir, exist_ok=True)
 
-        fieldnames = ["PSA_Id", "Domain", "Class", "English", "Kiswahili"]
+        fieldnames = ["PSA_Id", "Domain", "Class", "English", "Kiswahili", "Somali", "Luo", "is_synthetic", "model_version", "template_id"]
 
         print(f"Writing {len(shuffled_records)} interleaved records to {self.output_file}...")
         with open(self.output_file, mode='w', encoding='utf-8', newline='') as f:
@@ -43,6 +43,11 @@ class Exporter:
                     "Domain": record.get("Domain"),
                     "Class": record.get("Class", "PSA"),
                     "English": record.get("English"),
-                    "Kiswahili": record.get("Kiswahili")
+                    "Kiswahili": record.get("Kiswahili", ""),
+                    "Somali": record.get("Somali", ""),
+                    "Luo": record.get("Luo", ""),
+                    "is_synthetic": record.get("is_synthetic", True),
+                    "model_version": record.get("model_version", "NLLB-200"),
+                    "template_id": record.get("template_id", "T_GENERIC")
                 })
         print("Export completed successfully.")

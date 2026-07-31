@@ -43,6 +43,18 @@ class ControlledGrammarEngine:
             psa = f"{main_sentence} {follow_up}"
         else:
             psa = main_sentence
+
+        # Apply a micro-paraphrasing pass to vary syntax/vocabulary and avoid template rigidity
+        substitutions = {
+            " advises ": [" urges ", " directs ", " requests ", " calls upon ", " exhorts "],
+            " immediately ": [" without delay ", " urgently ", " promptly "],
+            " to mitigate the impact of ": [" to curb the threat of ", " to protect against ", " to reduce the risks of "],
+            " in response to ": [" following ", " in light of ", " due to rising cases of "],
+            " online via the official web portal": [" via the official portal", " online through the official portal", " through the portal online"]
+        }
+        for target, choices in substitutions.items():
+            if target in psa and random.random() < 0.5:
+                psa = psa.replace(target, random.choice(choices), 1)
             
         # Clean up double spaces, strip whitespace
         psa = " ".join(psa.split())
