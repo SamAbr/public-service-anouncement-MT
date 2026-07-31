@@ -91,31 +91,18 @@ Run these commands in your local computer's terminal:
 
 ---
 
-### Part 2: GPU-Accelerated Translation on Google Colab
+### Part 2: GPU-Accelerated Translation on Google Colab (Automated Notebook)
 
-1.  Open **[Google Colab](https://colab.research.google.com/)** and create a new notebook.
-2.  Go to **Runtime** > **Change runtime type**, select **T4 GPU** (free tier), and click **Save**.
-3.  Copy and run this single code block in Colab to upload your files, install libraries, and translate:
+We have provided a pre-configured [pipeline.ipynb](file:///C:/Users/Admin/.gemini/antigravity-ide/scratch/psa_generator/pipeline.ipynb) notebook in the repository root to completely automate the pipeline:
 
-```python
-# 1. Upload files programmatically from your computer
-from google.colab import files
-print("Please upload 'english_psas.csv' and 'translate_colab.py':")
-uploaded = files.upload()
-
-# 2. Install dependencies
-!pip install transformers sentencepiece tqdm pandas torch
-
-# 3. Run GPU translation in fast FP16 precision
-!python translate_colab.py --input english_psas.csv --output psa_parallel_dataset.csv --batch-size 128
-```
-
-4.  When prompted, select the locally generated `output/english_psas.csv` and the `translate_colab.py` script.
-5.  After the translation completes (~5-10 minutes), download your parallel dataset:
-```python
-from google.colab import files
-files.download('psa_parallel_dataset.csv')
-```
+1.  Open **[Google Colab](https://colab.research.google.com/)**.
+2.  Click **File** > **Upload Notebook** and upload the `pipeline.ipynb` file from your repository clone (or import it directly from your GitHub URL).
+3.  Go to **Runtime** > **Change runtime type**, select **T4 GPU** (free tier), and click **Save**.
+4.  Run the cells sequentially. The notebook will automatically:
+    *   Install dependencies.
+    *   Run the English generation script.
+    *   Run the 4-way translation GPU script (`translate_colab.py`).
+    *   Trigger a download prompt to save the finished `psa_parallel_dataset.csv` file.
 
 ---
 
