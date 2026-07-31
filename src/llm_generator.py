@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from typing import List, Dict
 from openai import OpenAI
 
@@ -61,7 +62,6 @@ Use and reference the correct Kenyan institutions when prompted:
 class AzureOpenAIGenerator:
     def __init__(self, api_key: str = None, endpoint: str = None, deployment: str = None, validator: ValidationEngine = None):
         self.api_key = api_key or os.getenv("AZURE_OPENAI_API_KEY")
-        # Default endpoint and deployment matching the Azure AI Foundry configuration
         self.endpoint = endpoint or os.getenv("AZURE_OPENAI_ENDPOINT") or "https://sagebremariam-4420-resource.services.ai.azure.com/openai/v1"
         self.deployment = deployment or os.getenv("AZURE_OPENAI_DEPLOYMENT") or "psa-generator"
         self.validator = validator or ValidationEngine(min_words=10, max_words=25)
@@ -69,10 +69,14 @@ class AzureOpenAIGenerator:
         self.provenance_log_file = "output/provenance_log.json"
         self.provenance_log = []
         
+        # Generation stats trackers
+        self.total_accepted = 0
+        self.total_rejected = 0
+        self.total_attempts = 0
+        
         self.client = None
         if self.api_key and self.endpoint:
             try:
-                # Use OpenAI client with base_url instead of AzureOpenAI
                 self.client = OpenAI(
                     api_key=self.api_key,
                     base_url=self.endpoint
@@ -85,16 +89,15 @@ class AzureOpenAIGenerator:
 
     def generate_batch(self, scenario_config: Dict, batch_size: int = 5) -> List[Dict]:
         """
-        Generates a batch of validated English PSAs for the scenario, calling Azure AI Foundry's Responses API,
-        incorporating self-correction rewrite loops and provenance logging.
+        Generates a batch of validated English PSAs for the scenario, requesting them in a single call to
+        minimize latency and API tokens. Automatically runs validators, self-correction loops, and tracks timing.
         """
         if not self.is_configured():
             raise ValueError("Azure AI Foundry Generator is not configured. Please provide base_url endpoint, api_key, and deployment/model name.")
 
         records = []
         
-        for i in range(batch_size):
-            user_prompt = f"""Generate a unique, natural-sounding English PSA for the following Scenario:
+        user_prompt = f"""Generate {batch_size} unique, distinct, and syntactically varied English PSAs for the following Scenario:
 
 ### Scenario Config:
 - Domain: {scenario_config['domain']}
@@ -113,81 +116,112 @@ class AzureOpenAIGenerator:
 - Distribution Channel: {scenario_config['distribution_channel']}
 
 ### Instructions:
-Generate exactly 1 PSA sentence (or 2 short sentences). It must be directed at {scenario_config['audience']}, command a public action, use simple plain English, and contain 10-25 words. Do not include metadata.
+Generate a list of {batch_size} independent public service announcements.
+Each PSA must:
+- Be directed at {scenario_config['audience']}.
+- Command a public action.
+- Use plain, simple English suitable for translation.
+- Contain between 10 to 25 words.
 """
 
-            validation_history = []
-            final_text = None
-            passed = False
+        validation_history = []
+        candidates_to_fill = batch_size
+        attempts = 0
+        max_attempts = 3
+        
+        while len(records) < batch_size and attempts < max_attempts:
+            attempts += 1
+            self.total_attempts += 1
             
-            for attempt in range(1, 4):
-                try:
-                    if attempt == 1:
-                        prompt_str = f"{SYSTEM_PROMPT}\n\n{user_prompt}\n\nReturn output in valid JSON format matching this schema: {{\"psas\": [{{\"english\": \"PSA text\"}}]}}"
-                    else:
-                        last_failed = validation_history[-1]["text"]
-                        last_reason = validation_history[-1]["failure_reason"]
-                        prompt_str = f"{SYSTEM_PROMPT}\n\n{user_prompt}\n\nPrevious attempt: '{last_failed}'\nFailed validation because: {last_reason}\n\nPlease rewrite the PSA to fix these issues. Ensure it contains 10-25 words, commands action, and has no legal/press keywords. Return output in valid JSON format matching this schema: {{\"psas\": [{{\"english\": \"PSA text\"}}]}}"
-                        
-                    # Call Responses API
-                    response = self.client.responses.create(
-                        model=self.deployment,
-                        input=prompt_str
-                    )
+            # 1. Build the prompt
+            if attempts == 1:
+                prompt_str = f"{SYSTEM_PROMPT}\n\n{user_prompt}\n\nReturn output in valid JSON format matching this schema: {{\"psas\": [{{\"english\": \"PSA text\"}}]}}"
+            else:
+                # Compile validation errors for feedback loop
+                failed_items_info = []
+                for hist in validation_history:
+                    if not hist["passed"] and hist["attempt"] == attempts - 1:
+                        failed_items_info.append(f"Failed candidate: '{hist['text']}' -> Reason: {hist['failure_reason']}")
+                errors_str = "\n".join(failed_items_info)
+                
+                prompt_str = f"{SYSTEM_PROMPT}\n\n{user_prompt}\n\n### Previous Attempt Errors:\n{errors_str}\n\nPlease generate {candidates_to_fill} new/corrected PSAs that completely satisfy the rules. Ensure they are 10-25 words, command action, and have no legal/press keywords. Return output in valid JSON format matching this schema: {{\"psas\": [{{\"english\": \"PSA text\"}}]}}"
+
+            # 2. Call Azure Responses API with timing
+            t0 = time.time()
+            try:
+                response = self.client.responses.create(
+                    model=self.deployment,
+                    input=prompt_str
+                )
+                raw_text = response.output_text
+            except Exception as e:
+                print(f"API Error: {e}")
+                break
+                
+            api_duration = time.time() - t0
+            print(f"[Attempt {attempts}] API Call completed in {api_duration:.2f} seconds.")
+
+            # 3. Clean and parse JSON
+            t1 = time.time()
+            try:
+                cleaned_text = raw_text.strip()
+                if cleaned_text.startswith("```"):
+                    lines = cleaned_text.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    cleaned_text = "\n".join(lines).strip()
                     
-                    raw_text = response.output_text
-                    
-                    # Clean markdown code block wraps if present
-                    cleaned_text = raw_text.strip()
-                    if cleaned_text.startswith("```"):
-                        lines = cleaned_text.splitlines()
-                        if lines[0].startswith("```"):
-                            lines = lines[1:]
-                        if lines[-1].startswith("```"):
-                            lines = lines[:-1]
-                        cleaned_text = "\n".join(lines).strip()
+                data = json.loads(cleaned_text)
+                parsed = PSABatchResponse.model_validate(data)
+                candidates = parsed.psas if parsed and parsed.psas else []
+            except Exception as e:
+                print(f"JSON Parsing Error: {e}")
+                candidates = []
+                
+            # 4. Run multi-stage validations with timing
+            for candidate in candidates:
+                candidate_text = candidate.english
+                is_valid, reason = self.validator.validate(candidate_text)
+                
+                if is_valid:
+                    if not self.validator.is_semantically_unique(candidate_text, threshold=0.92):
+                        is_valid = False
+                        reason = "Similarity overlap check failed"
                         
-                    data = json.loads(cleaned_text)
-                    parsed = PSABatchResponse.model_validate(data)
-                    
-                    if parsed and parsed.psas:
-                        candidate_text = parsed.psas[0].english
-                        
-                        is_valid, reason = self.validator.validate(candidate_text)
-                        
-                        if is_valid:
-                            if not self.validator.is_semantically_unique(candidate_text, threshold=0.92):
-                                is_valid = False
-                                reason = "Rejected by semantic similarity check (similarity > 0.92)"
-                                
-                        validation_history.append({
-                            "attempt": attempt,
-                            "text": candidate_text,
-                            "passed": is_valid,
-                            "failure_reason": None if is_valid else reason
-                        })
-                        
-                        if is_valid:
-                            final_text = candidate_text
-                            passed = True
-                            break
-                    else:
-                        validation_history.append({
-                            "attempt": attempt,
-                            "text": "",
-                            "passed": False,
-                            "failure_reason": "Parsed list is empty"
-                        })
-                except Exception as e:
-                    validation_history.append({
-                        "attempt": attempt,
-                        "text": "",
-                        "passed": False,
-                        "failure_reason": f"API Exception: {str(e)}"
+                validation_history.append({
+                    "attempt": attempts,
+                    "text": candidate_text,
+                    "passed": is_valid,
+                    "failure_reason": None if is_valid else reason
+                })
+                
+                if is_valid:
+                    self.total_accepted += 1
+                    records.append({
+                        "English": candidate_text,
+                        "intent": scenario_config['intent'],
+                        "severity": scenario_config['severity'],
+                        "syntactic_pattern": scenario_config['syntactic_pattern'],
+                        "lexical_profile": scenario_config['lexical_profile'],
+                        "word_count": len(candidate_text.split())
                     })
+                else:
+                    self.total_rejected += 1
+                    
+            validation_duration = time.time() - t1
+            print(f"[Attempt {attempts}] Validation completed in {validation_duration:.4f} seconds.")
             
-            # Log provenance details
-            psa_id = f"PSA_{scenario_config['domain'].split()[0][:3].upper()}_{len(records) + 1:05d}"
+            # Recalculate remaining candidates needed
+            candidates_to_fill = batch_size - len(records)
+            if candidates_to_fill <= 0:
+                break
+                
+        # Log provenance details
+        psa_id_base = f"PSA_{scenario_config['domain'].split()[0][:3].upper()}"
+        for idx, record in enumerate(records):
+            psa_id = f"{psa_id_base}_{len(self.provenance_log) + 1:05d}"
             log_entry = {
                 "psa_id": psa_id,
                 "planner_inputs": {
@@ -204,24 +238,19 @@ Generate exactly 1 PSA sentence (or 2 short sentences). It must be directed at {
                     "distribution_channel": scenario_config['distribution_channel']
                 },
                 "raw_prompt": user_prompt,
-                "validation_history": validation_history,
-                "passed": passed
+                "validation_history": [h for h in validation_history if h["text"] == record["English"] or not h["passed"]],
+                "passed": True
             }
             self.provenance_log.append(log_entry)
             
-            if passed and final_text:
-                records.append({
-                    "English": final_text,
-                    "intent": scenario_config['intent'],
-                    "severity": scenario_config['severity'],
-                    "syntactic_pattern": scenario_config['syntactic_pattern'],
-                    "lexical_profile": scenario_config['lexical_profile'],
-                    "word_count": len(final_text.split())
-                })
-                
         self.save_provenance_log()
         
-        return records
+        # Log batch run summary metrics
+        total_attempts = self.total_attempts
+        avg_attempts = total_attempts / max(1, self.total_accepted)
+        print(f"=== BATCH METRICS: Accepted: {self.total_accepted} | Rejected: {self.total_rejected} | Avg Attempts per PSA: {avg_attempts:.2f} ===")
+        
+        return records[:batch_size]
 
     def save_provenance_log(self):
         """
