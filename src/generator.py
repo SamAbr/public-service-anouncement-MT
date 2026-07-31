@@ -10,7 +10,7 @@ from .translator import NLLBTranslator
 # Import scenarios, entities, and templates
 from .knowledge.scenarios import SCENARIOS, INSTITUTIONS, AUDIENCES, HAZARDS, LOCATIONS
 from .knowledge.entities import Context
-from .templates.families import TEMPLATE_FAMILIES, OPENINGS
+from .templates.families import TEMPLATE_FAMILIES, DOMAIN_OPENINGS
 
 class PSAGenerator:
     def __init__(self, size=50000, translator=None, checkpoint_file=None, engine="templates",
@@ -186,7 +186,8 @@ class PSAGenerator:
                     # Template-based realization fallback
                     templates_list = TEMPLATE_FAMILIES[intent][severity][pattern]
                     template = self._select_balanced_choice(templates_list, "template_use")
-                    opening = random.choice(OPENINGS)
+                    openings = DOMAIN_OPENINGS.get(domain, ["Official Advisory:"])
+                    opening = random.choice(openings)
                     
                     english_text = self.grammar_engine.generate_psa(
                         template=template,
@@ -201,6 +202,12 @@ class PSAGenerator:
                         terminology=term,
                         season=context.season
                     )
+                    
+                    # Grammar cleanup: remove duplicate "to to"
+                    while "to to" in english_text:
+                        english_text = english_text.replace("to to", "to")
+                    while "  " in english_text:
+                        english_text = english_text.replace("  ", " ")
                     
                     is_valid, reason = self.validator.validate(english_text)
                     if not is_valid:

@@ -1,14 +1,16 @@
 # Simplified Template Families mapped by (Intent, Severity, SyntacticPattern)
 # Designed to remain strictly within the 10-25 word boundary for authentic PSAs.
 
-OPENINGS = [
-    "Public Alert:",
-    "Ministry Notice:",
-    "Official Advisory:",
-    "Security Alert:",
-    "Health Notice:",
-    "Farming Notice:"
-]
+# Simplified Template Families mapped by (Intent, Severity, SyntacticPattern)
+# Designed to remain strictly within the 10-25 word boundary for authentic PSAs.
+
+DOMAIN_OPENINGS = {
+    "Education": ["Ministry Notice:", "Official Advisory:", "Education Notice:", "Public Notice:"],
+    "Agriculture": ["Farming Notice:", "Agricultural Alert:", "Official Advisory:"],
+    "Health": ["Health Notice:", "Medical Advisory:", "Public Health Alert:"],
+    "Security & Safety": ["Security Alert:", "Safety Notice:", "Official Advisory:"],
+    "Governance": ["Public Notice:", "Official Advisory:", "Government Notice:"]
+}
 
 TEMPLATE_FAMILIES = {
     "Warning": {
