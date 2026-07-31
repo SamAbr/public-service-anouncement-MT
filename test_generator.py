@@ -2,9 +2,7 @@ import unittest
 import os
 import shutil
 import tempfile
-from src.config import DOMAINS
 from src.grammar import ControlledGrammarEngine
-from src.deduplicator import Deduplicator
 from src.validator import ValidationEngine
 from src.exporter import Exporter
 from src.generator import PSAGenerator
@@ -38,70 +36,67 @@ class TestPSAGenerator(unittest.TestCase):
 
     def test_grammar_engine(self):
         engine = ControlledGrammarEngine()
-        templates = ["{opening} {institution} {audience} {action} {hazard} {location}."]
-        openings = ["Public Alert:"]
-        follow_ups = ["Follow guidelines."]
-        institutions = ["Min Health"]
-        audiences = ["all residents"]
-        actions = ["wash hands"]
-        hazards = ["cholera outbreak"]
-        locations = ["in cities"]
+        template = "{opening} {institution} {audience} {action_infinitive} {hazard} {location}."
+        opening = "Public Alert:"
+        institution = "Ministry of Health"
+        audience = "residents"
+        action_infinitive = "[boil] drinking water"
+        action_imperative = "[boil] drinking water"
+        action_noun = "[boil] drinking water"
+        hazard = "cholera outbreak"
+        location = "in cities"
         
         psa = engine.generate_psa(
-            templates=templates,
-            openings=openings,
-            follow_ups=follow_ups,
-            institutions=institutions,
-            audiences=audiences,
-            actions=actions,
-            hazards=hazards,
-            locations=locations,
-            terminologies=["hygiene"]
+            template=template,
+            opening=opening,
+            institution=institution,
+            audience=audience,
+            action_infinitive=action_infinitive,
+            action_imperative=action_imperative,
+            action_noun=action_noun,
+            hazard=hazard,
+            location=location
         )
-        self.assertIn("Public Alert: Min Health all residents wash hands cholera outbreak in cities.", psa)
+        self.assertIn("Public Alert: Ministry of Health residents", psa)
+        self.assertNotIn("[boil]", psa)  # Verify bracketed verb synonymized
 
     def test_validation_engine(self):
-        validator = ValidationEngine(min_words=5, max_words=15)
+        validator = ValidationEngine(min_words=10, max_words=45)
         
-        # Test word range
-        valid_text = "The Ministry of Health advises all citizens to boil drinking water today."
+        # Test valid sentence (length within limits, capitalization, ends in punctuation)
+        valid_text = "The Ministry of Health advises all citizens to boil drinking water today in sub-counties."
         is_valid, reason = validator.validate(valid_text)
         self.assertTrue(is_valid, f"Failed validation: {reason}")
         
-        # Test short text
+        # Test short text (12-40 default, but here 10-45)
         short_text = "Wash hands."
         is_valid, reason = validator.validate(short_text)
         self.assertFalse(is_valid)
         
-        # Test punctuation
-        no_punc = "The Ministry of Health advises all citizens to boil drinking water"
+        # Test missing punctuation
+        no_punc = "The Ministry of Health advises all citizens to boil drinking water today"
         is_valid, reason = validator.validate(no_punc)
         self.assertFalse(is_valid)
 
-    def test_deduplicator(self):
-        dedup = Deduplicator()
-        text = "This is a unique public announcement."
-        slots = ("Education", 0, "Ministry", "Students", "Learn")
-        
-        self.assertFalse(dedup.is_duplicate(text, slots))
-        dedup.add(text, slots)
-        
-        # Check duplicate
-        self.assertTrue(dedup.is_duplicate(text, slots))
-        self.assertTrue(dedup.is_duplicate("THIS IS A UNIQUE PUBLIC ANNOUNCEMENT."))
+        # Test double modifiers
+        duplicate_mod = "The Ministry urges all citizens to boil water immediately and immediately go to clinic."
+        is_valid, reason = validator.validate(duplicate_mod)
+        self.assertFalse(is_valid)
 
     def test_full_pipeline_mocked(self):
-        # Generate a small dataset (e.g. 50 pairs, 10 per domain)
+        # Generate 25 parallel records (5 per domain)
         test_checkpoint = os.path.join(self.temp_dir, "test_checkpoint.json")
-        generator = PSAGenerator(size=50, translator=self.mock_translator, checkpoint_file=test_checkpoint)
+        generator = PSAGenerator(size=25, translator=self.mock_translator, checkpoint_file=test_checkpoint)
         records = generator.generate_and_translate()
         
-        self.assertEqual(len(records), 50)
+        self.assertEqual(len(records), 25)
         
-        # Verify structure
+        # Verify metadata structure
         for record in records:
             self.assertIn("PSA_Id", record)
             self.assertIn("Domain", record)
+            self.assertIn("Topic", record)
+            self.assertIn("Subtopic", record)
             self.assertEqual(record["Class"], "PSA")
             self.assertIn("English", record)
             self.assertIn("Kiswahili", record)
@@ -112,7 +107,12 @@ class TestPSAGenerator(unittest.TestCase):
             self.assertTrue(record["Luo"].endswith("- Luo Translation"))
             self.assertEqual(record["is_synthetic"], True)
             self.assertEqual(record["model_version"], "NLLB-200")
-            self.assertTrue(record["template_id"].startswith("T_"))
+            self.assertIn("scenario_id", record)
+            self.assertIn("intent", record)
+            self.assertIn("severity", record)
+            self.assertIn("syntactic_pattern", record)
+            self.assertIn("lexical_profile", record)
+            self.assertIn("word_count", record)
             
         # Export
         exporter = Exporter(self.output_csv)
@@ -120,10 +120,10 @@ class TestPSAGenerator(unittest.TestCase):
         
         self.assertTrue(os.path.exists(self.output_csv))
         
-        # Read file to check lines count (50 records + 1 header = 51 lines)
+        # Read file to check lines count (25 records + 1 header = 26 lines)
         with open(self.output_csv, 'r', encoding='utf-8') as f:
             lines = f.readlines()
-        self.assertEqual(len(lines), 51)
+        self.assertEqual(len(lines), 26)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,137 +1,162 @@
 import os
 import json
 import random
+from collections import defaultdict
 from .config import DOMAINS, MIN_WORDS, MAX_WORDS, CHECKPOINT_FILE
 from .grammar import ControlledGrammarEngine
-from .deduplicator import Deduplicator
 from .validator import ValidationEngine
 from .translator import NLLBTranslator
 
-# Import templates
-from .templates import education, agriculture, governance, health, security
-
-# Import knowledge base
-from .knowledge import institutions, audiences, actions, hazards, locations, terminology
+# Import new scenarios and entities
+from .knowledge.scenarios import SCENARIOS, INSTITUTIONS, AUDIENCES, HAZARDS, LOCATIONS
+from .knowledge.entities import Context
+from .templates.families import TEMPLATE_FAMILIES, OPENINGS
 
 class PSAGenerator:
     def __init__(self, size=50000, translator=None, checkpoint_file=None):
         self.size = size
         self.target_per_domain = size // len(DOMAINS)
         self.grammar_engine = ControlledGrammarEngine()
-        self.deduplicator = Deduplicator()
-        self.validator = ValidationEngine(min_words=MIN_WORDS, max_words=MAX_WORDS)
+        self.validator = ValidationEngine(min_words=12, max_words=40)
         self.translator = translator if translator else NLLBTranslator()
         self.checkpoint_file = checkpoint_file if checkpoint_file else CHECKPOINT_FILE
         
-        # Mapping domains to their templates
-        self.templates_map = {
-            "Education": education,
-            "Agriculture": agriculture,
-            "Governance": governance,
-            "Health": health,
-            "Security & Safety": security
+        # Corpus-Level Balancing Controller state
+        self.stats = {
+            "domain": defaultdict(int),
+            "scenario_id": defaultdict(int),
+            "intent": defaultdict(int),
+            "severity": defaultdict(int),
+            "syntactic_pattern": defaultdict(int),
+            "template_use": defaultdict(int)
         }
+
+    def _select_balanced_choice(self, choices, stat_category):
+        """
+        Implements the Corpus-Level Balancing Controller:
+        Selects a choice that has the minimum frequency generated so far to ensure even distribution.
+        """
+        if not choices:
+            return None
+        # Sort choices by their occurrence stats (ascending)
+        scored_choices = [(choice, self.stats[stat_category][str(choice)]) for choice in choices]
+        # Find min frequency
+        min_freq = min(score for _, score in scored_choices)
+        # Select randomly from all candidates that share the minimum frequency
+        candidates = [choice for choice, score in scored_choices if score == min_freq]
+        return random.choice(candidates)
 
     def generate_english_psas(self):
         """
-        Generates the target number of unique, valid English PSAs for all domains.
+        Generates the target number of unique, valid, and semantically diverse English PSAs.
         Returns a list of dicts containing the English text and domain metadata.
         """
         english_records = []
         
         for domain in DOMAINS:
             print(f"Generating English PSAs for domain: '{domain}'...")
-            domain_templates = self.templates_map[domain]
-            
+            scenarios = SCENARIOS.get(domain, [])
+            if not scenarios:
+                continue
+                
             count = 0
             attempts = 0
             max_attempts = self.target_per_domain * 20  # Safeguard against infinite loops
             
-            # Fetch knowledge lists
-            insts = institutions.get_institutions_for_domain(domain)
-            auds = audiences.get_audiences_for_domain(domain)
-            acts = actions.get_actions_for_domain(domain)
-            hazs = hazards.get_hazards_for_domain(domain)
-            locs = locations.get_locations_for_domain(domain)
-            terms = terminology.get_terminology_for_domain(domain)
-            
             while count < self.target_per_domain and attempts < max_attempts:
                 attempts += 1
                 
-                # 1. Pick a random template index
-                template_idx = random.randint(0, len(domain_templates.TEMPLATES) - 1)
+                # 1. Select Scenario (Balancing Controller)
+                scenario = self._select_balanced_choice(scenarios, "scenario_id")
                 
-                # 2. Pick a thematic tag from the elements in the domain lists (excluding "general" if possible)
-                all_tags = set()
-                for items in [insts, acts, hazs]:
-                    for item in items:
-                        if isinstance(item, tuple) and len(item) > 1:
-                            all_tags.update(item[1])
-                specific_tags = all_tags - {"general"}
-                chosen_tag = random.choice(list(specific_tags)) if specific_tags else (random.choice(list(all_tags)) if all_tags else None)
-
-                # Helper to filter items by the selected tag
-                def filter_by_tag(item_list, tag):
-                    if not tag:
-                        return [item[0] if isinstance(item, tuple) else item for item in item_list]
-                    filtered = []
-                    for item in item_list:
-                        if isinstance(item, tuple):
-                            if tag in item[1] or "general" in item[1]:
-                                filtered.append(item[0])
-                        else:
-                            filtered.append(item)
-                    return filtered if filtered else [item[0] if isinstance(item, tuple) else item for item in item_list]
-
-                filtered_insts = filter_by_tag(insts, chosen_tag)
-                filtered_acts = filter_by_tag(acts, chosen_tag)
-                filtered_hazs = filter_by_tag(hazs, chosen_tag)
-
-                # 3. Select coherent slots
-                inst = random.choice(filtered_insts)
-                aud = random.choice(auds)
-                act = random.choice(filtered_acts)
-                haz = random.choice(filtered_hazs)
-                loc = random.choice(locs)
+                # 2. Select Relationship Constraint (logical grouping of inst, aud, act, haz)
+                rel = random.choice(scenario.relationships)
                 
-                # Follow up (70% probability)
-                has_follow_up = random.random() < 0.70
-                follow_up_idx = random.randint(0, len(domain_templates.FOLLOW_UPS) - 1) if has_follow_up else -1
+                inst = INSTITUTIONS.get(rel.institution_id)
+                aud_id = random.choice(rel.audience_ids)
+                aud = AUDIENCES.get(aud_id)
+                act = next((a for a in scenario.actions if a.id in rel.action_ids), None)
+                haz = next((h for h in scenario.hazards if h.id in rel.hazard_ids), None)
                 
-                slot_combination = (domain, template_idx, inst, aud, act, haz, loc, follow_up_idx)
+                if not all([inst, aud, act, haz]):
+                    continue
+                    
+                # Select random location and terminology from scenario pools
+                loc = random.choice(scenario.locations)
+                term = random.choice(scenario.terminology) if scenario.terminology else ""
                 
-                # Generate sentence (we pass single-item lists to guarantee slot_combination matches the generated text)
-                english_text = self.grammar_engine.generate_psa(
-                    templates=domain_templates.TEMPLATES,
-                    openings=domain_templates.OPENINGS,
-                    follow_ups=domain_templates.FOLLOW_UPS,
-                    institutions=[inst],
-                    audiences=[aud],
-                    actions=[act],
-                    hazards=[haz],
-                    locations=[loc],
-                    terminologies=terms
+                # 3. Context Builder
+                season = "general"
+                if scenario.allowed_seasons != ["any"]:
+                    season = random.choice(scenario.allowed_seasons)
+                
+                context = Context(
+                    season=season,
+                    weather="heavy rainfall" if season == "rainy" else ("dry spell" if season == "dry" else "normal weather"),
+                    school_calendar="exam period" if scenario.id == "exam_security" else "normal term"
                 )
                 
-                # Validate English
+                # 4. Select Intent & Severity (Balancing Controller)
+                # Filter intents available in TEMPLATE_FAMILIES
+                intents = list(TEMPLATE_FAMILIES.keys())
+                intent = self._select_balanced_choice(intents, "intent")
+                
+                severities = list(TEMPLATE_FAMILIES[intent].keys())
+                severity = self._select_balanced_choice(severities, "severity")
+                
+                patterns = list(TEMPLATE_FAMILIES[intent][severity].keys())
+                pattern = self._select_balanced_choice(patterns, "syntactic_pattern")
+                
+                # 5. Select template
+                templates_list = TEMPLATE_FAMILIES[intent][severity][pattern]
+                template = self._select_balanced_choice(templates_list, "template_use")
+                
+                opening = random.choice(OPENINGS)
+                
+                # 6. Realize PSA sentence via grammar engine
+                english_text = self.grammar_engine.generate_psa(
+                    template=template,
+                    opening=opening,
+                    institution=inst.name,
+                    audience=aud.name,
+                    action_infinitive=act.infinitive,
+                    action_imperative=act.imperative,
+                    action_noun=act.noun,
+                    hazard=haz.name,
+                    location=loc.name,
+                    terminology=term,
+                    season=context.season
+                )
+                
+                # 7. Realism Validation
                 is_valid, reason = self.validator.validate(english_text)
                 if not is_valid:
                     continue
                     
-                # Deduplicate English
-                if self.deduplicator.is_duplicate(english_text, slot_combination):
+                # 8. Semantic Similarity Check (Cosine Similarity < 0.92 / Jaccard)
+                if not self.validator.is_semantically_unique(english_text, threshold=0.92):
                     continue
                     
-                # Register
-                self.deduplicator.add(english_text, slot_combination)
+                # 9. Register statistics on success
+                self.stats["domain"][domain] += 1
+                self.stats["scenario_id"][scenario.id] += 1
+                self.stats["intent"][intent] += 1
+                self.stats["severity"][severity] += 1
+                self.stats["syntactic_pattern"][pattern] += 1
+                self.stats["template_use"][template] += 1
                 
                 # Unique ID format: PSA_EDU_00001
                 domain_prefix = domain.split()[0][:3].upper()
                 psa_id = f"PSA_{domain_prefix}_{count+1:05d}"
                 
+                # Lexical profile mapping
+                lexical_profile = "Emergency" if severity == "Emergency" else ("Formal" if intent == "Warning" else "Community outreach")
+                
                 english_records.append({
                     "PSA_Id": psa_id,
                     "Domain": domain,
+                    "Topic": scenario.topic,
+                    "Subtopic": scenario.subtopic,
                     "Class": "PSA",
                     "English": english_text,
                     "Kiswahili": "",
@@ -139,7 +164,12 @@ class PSAGenerator:
                     "Luo": "",
                     "is_synthetic": True,
                     "model_version": "NLLB-200",
-                    "template_id": f"T_{domain_prefix}_{template_idx}"
+                    "scenario_id": scenario.id,
+                    "intent": intent,
+                    "severity": severity,
+                    "syntactic_pattern": pattern,
+                    "lexical_profile": lexical_profile,
+                    "word_count": len(english_text.split())
                 })
                 count += 1
                 

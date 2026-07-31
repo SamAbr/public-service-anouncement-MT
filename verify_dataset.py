@@ -10,13 +10,18 @@ def verify_dataset(filepath="output/psa_parallel_dataset.csv"):
     df = pd.read_csv(filepath)
     
     # 1. Check columns
-    expected_cols = ["PSA_Id", "Domain", "Class", "English", "Kiswahili", "Somali", "Luo", "is_synthetic", "model_version", "template_id"]
+    expected_cols = [
+        "PSA_Id", "Domain", "Topic", "Subtopic", "Class", "English",
+        "Kiswahili", "Somali", "Luo", "is_synthetic", "model_version",
+        "scenario_id", "intent", "severity", "syntactic_pattern",
+        "lexical_profile", "word_count"
+    ]
     missing_cols = [col for col in expected_cols if col not in df.columns]
     
     if missing_cols:
         print(f"[FAILED] Missing columns in CSV: {missing_cols}")
         return False
-    print("[PASSED] All 10 expected columns exist.")
+    print("[PASSED] All 17 expected columns exist.")
     
     # 2. Check size
     print(f"Total records found: {len(df)}")

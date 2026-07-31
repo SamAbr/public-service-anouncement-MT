@@ -9,13 +9,6 @@ class Exporter:
     def export(self, records):
         """
         Exports the records to the output CSV file.
-        Each record should be a dict: {
-            "PSA_Id": str,
-            "Domain": str,
-            "Class": "PSA",
-            "English": str,
-            "Kiswahili": str
-        }
         The records are randomly shuffled (interleaved) before being written.
         """
         if not records:
@@ -31,7 +24,12 @@ class Exporter:
         if parent_dir:
             os.makedirs(parent_dir, exist_ok=True)
 
-        fieldnames = ["PSA_Id", "Domain", "Class", "English", "Kiswahili", "Somali", "Luo", "is_synthetic", "model_version", "template_id"]
+        fieldnames = [
+            "PSA_Id", "Domain", "Topic", "Subtopic", "Class", "English",
+            "Kiswahili", "Somali", "Luo", "is_synthetic", "model_version",
+            "scenario_id", "intent", "severity", "syntactic_pattern",
+            "lexical_profile", "word_count"
+        ]
 
         print(f"Writing {len(shuffled_records)} interleaved records to {self.output_file}...")
         with open(self.output_file, mode='w', encoding='utf-8', newline='') as f:
@@ -41,6 +39,8 @@ class Exporter:
                 writer.writerow({
                     "PSA_Id": record.get("PSA_Id"),
                     "Domain": record.get("Domain"),
+                    "Topic": record.get("Topic", ""),
+                    "Subtopic": record.get("Subtopic", ""),
                     "Class": record.get("Class", "PSA"),
                     "English": record.get("English"),
                     "Kiswahili": record.get("Kiswahili", ""),
@@ -48,6 +48,11 @@ class Exporter:
                     "Luo": record.get("Luo", ""),
                     "is_synthetic": record.get("is_synthetic", True),
                     "model_version": record.get("model_version", "NLLB-200"),
-                    "template_id": record.get("template_id", "T_GENERIC")
+                    "scenario_id": record.get("scenario_id", ""),
+                    "intent": record.get("intent", ""),
+                    "severity": record.get("severity", ""),
+                    "syntactic_pattern": record.get("syntactic_pattern", ""),
+                    "lexical_profile": record.get("lexical_profile", ""),
+                    "word_count": record.get("word_count", 0)
                 })
         print("Export completed successfully.")

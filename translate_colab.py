@@ -65,15 +65,11 @@ def main():
         df = pd.read_csv(args.input)
         
     # Ensure target columns exist in the DataFrame (handles upgrading older CSV formats)
-    for col in ["Kiswahili", "Somali", "Luo", "is_synthetic", "model_version", "template_id"]:
+    for col in ["Kiswahili", "Somali", "Luo", "is_synthetic", "model_version"]:
         if col not in df.columns:
             df[col] = ""
     df["is_synthetic"] = True
     df["model_version"] = "NLLB-200"
-
-    # We need template_id from inputs if it exists, otherwise placeholder
-    if "template_id" not in df.columns:
-        df["template_id"] = "T_GENERIC"
 
     total_records = len(df)
     english_texts = df["English"].tolist()

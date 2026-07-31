@@ -1,61 +1,69 @@
 import random
+import re
+
+SYNONYMS = {
+    "verify": ["verify", "check", "confirm", "validate", "review"],
+    "adhere": ["adhere to", "comply with", "follow", "abide by", "observe"],
+    "report": ["report", "notify", "inform", "alert", "lodge a report on"],
+    "submit": ["submit", "file", "present", "forward", "lodge"],
+    "update": ["update", "refresh", "amend", "modify"],
+    "apply": ["apply", "use", "deploy", "utilize"],
+    "adopt": ["adopt", "implement", "utilize", "embrace"],
+    "stockpile": ["stockpile", "store", "accumulate", "reserve", "lay in"],
+    "avoid": ["avoid", "steer clear of", "shun", "evade"],
+    "relocate": ["relocate", "move", "evacuate", "shift"],
+    "boil": ["boil", "purify", "treat"],
+    "register": ["register for", "enroll in", "sign up for"]
+}
 
 class ControlledGrammarEngine:
     def __init__(self):
-        # We will import templates dynamically or pass them during generation
         pass
 
-    def generate_psa(self, templates, openings, follow_ups, institutions, audiences, actions, hazards, locations, terminologies):
+    def resolve_lexical_variants(self, text: str) -> str:
         """
-        Generates a structured PSA sentence using the provided components.
+        Dynamically replaces bracketed verbs (e.g., [verify]) with random synonyms,
+        preserving uppercase capitalization.
         """
-        # Choose random components
-        opening = random.choice(openings)
-        institution = random.choice(institutions)
-        audience = random.choice(audiences)
-        action = random.choice(actions)
-        hazard = random.choice(hazards)
-        location = random.choice(locations)
-        
-        # Choose a template
-        template = random.choice(templates)
-        
-        # Format the main PSA sentence
-        main_sentence = template.format(
+        def replacer(match):
+            raw_verb = match.group(1)
+            verb = raw_verb.lower()
+            if verb in SYNONYMS:
+                choice = random.choice(SYNONYMS[verb])
+                if raw_verb and raw_verb[0].isupper():
+                    choice = choice[0].upper() + choice[1:]
+                return choice
+            return raw_verb
+        return re.sub(r'\[(.*?)\]', replacer, text)
+
+    def generate_psa(self, template: str, opening: str, institution: str, audience: str, 
+                     action_infinitive: str, action_imperative: str, action_noun: str,
+                     hazard: str, location: str, terminology: str = "", season: str = "general") -> str:
+        """
+        Formats a template using scenario entities and processes lexical synonym substitution.
+        """
+        # Format placeholders
+        formatted = template.format(
             opening=opening,
             institution=institution,
             audience=audience,
-            action=action,
+            action_infinitive=action_infinitive,
+            action_imperative=action_imperative,
+            action_noun=action_noun,
             hazard=hazard,
-            location=location
+            location=location,
+            terminology=terminology,
+            season=season
         )
         
-        # Decided whether to include a follow-up sentence
-        # 70% chance of adding a follow-up to increase length and variation
-        if random.random() < 0.70 and follow_ups:
-            follow_up = random.choice(follow_ups)
-            # We can optionally inject a terminology keyword into the follow-up
-            if "{term}" in follow_up and terminologies:
-                term = random.choice(terminologies)
-                follow_up = follow_up.format(term=term)
-            
-            # Combine sentences
-            psa = f"{main_sentence} {follow_up}"
-        else:
-            psa = main_sentence
-
-        # Apply a micro-paraphrasing pass to vary syntax/vocabulary and avoid template rigidity
-        substitutions = {
-            " advises ": [" urges ", " directs ", " requests ", " calls upon ", " exhorts "],
-            " immediately ": [" without delay ", " urgently ", " promptly "],
-            " to mitigate the impact of ": [" to curb the threat of ", " to protect against ", " to reduce the risks of "],
-            " in response to ": [" following ", " in light of ", " due to rising cases of "],
-            " online via the official web portal": [" via the official portal", " online through the official portal", " through the portal online"]
-        }
-        for target, choices in substitutions.items():
-            if target in psa and random.random() < 0.5:
-                psa = psa.replace(target, random.choice(choices), 1)
-            
-        # Clean up double spaces, strip whitespace
+        # Apply lexical variant substitutions
+        psa = self.resolve_lexical_variants(formatted)
+        
+        # Clean double spaces and strip
         psa = " ".join(psa.split())
+        
+        # Ensure correct sentence ending punctuation
+        if not psa.endswith((".", "!", "?")):
+            psa += "."
+            
         return psa
