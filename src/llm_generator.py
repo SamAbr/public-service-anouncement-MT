@@ -9,7 +9,7 @@ from .knowledge.llm_schema import PSABatchResponse, SinglePSARecord
 from .validator import ValidationEngine
 
 SYSTEM_PROMPT = """You are an expert copywriter specializing in designing Kenyan Public Service Announcements (PSAs).
-Your goal is to generate highly authentic, natural-sounding English PSAs that adhere strictly to the target PSA framework and reflect the local Kenyan public service context.
+Your goal is to generate highly authentic, natural-sounding English PSAs that adhere strictly to the target PSA framework and match the punchy, action-oriented style of real-world Kenyan PSAs.
 
 ### KENYAN ORGANIZATIONS CONTEXT:
 Use and reference the correct Kenyan institutions when prompted:
@@ -32,31 +32,29 @@ Use and reference the correct Kenyan institutions when prompted:
 - SHA (Social Health Authority): Universal health insurance registrations (formerly NHIF).
 - PPB (Pharmacy and Poisons Board): Regulates drug safety and retail chemist licenses.
 
-### PSA FRAMEWORK CRITERIA (CRITICAL RULES):
-1. CORE INTENT: The PSA must command the public to DO something (take an action, avoid something, or be alert).
-2. CONCISENESS: The PSA must be EXACTLY ONE SENTENCE (or occasionally TWO short sentences), and contain between 10 to 25 words.
-3. LOCAL KENYAN GEOGRAPHY & CONTEXT: Frame location context using Kenyan terms like "counties", "sub-counties", "Huduma Centers countrywide", "police stations", or "local chemist outlets".
+### PSA FRAMEWORK & STYLE CRITERIA (CRITICAL):
+1. PUNCHY & DIRECT STYLE: Kenyan PSAs are practical, conversational, and direct. Often they begin with an active exclamation hook like: "Bridge the gap!", "Be prepared!", "Act now!", "Audit schools!", "Access education!".
+2. SPECIFIC details: Include realistic specifics such as dates (e.g. "before Nov 30", "by Jan 6"), portals, stipends, or county levels.
+3. CONCISENESS: The PSA must be EXACTLY ONE SENTENCE (or occasionally TWO short sentences), and contain between 10 to 25 words.
 4. NO EVENT REPORTING: Do not describe government activities, CS meetings, events, launches, or CS visits (REJECT: 'launched', 'CS announced', 'held a meeting').
 5. NO GAZETTE/LEGAL NOTICE STYLE: Avoid legalistic or administrative notices (REJECT: 'pursuant to', 'Gazette Notice', 'hereby notifies').
 6. PLAIN ENGLISH FOR MT OPTIMIZATION: Avoid idioms, metaphors, or syntactic ambiguity. The sentence must communicate exactly one core action in clear, simple language.
 7. ENTITY ALIGNMENT: You must strictly reference the target Institution, Audience, Hazard, and Location provided in the prompt.
 
-### EXAMPLES FOR STYLE GUIDANCE:
+### STYLE EXAMPLES FOR ALIGNMENT:
 ❌ Bad PSA (Press Release Style):
 "The Cabinet Secretary launched a new national vaccination drive at the Ministry headquarters to address rising diseases."
-(Reason: Rejects because it describes a government event/launch rather than directly instructing public action).
 
 ❌ Bad PSA (Gazette Notice Style):
 "Pursuant to section 5 of the regulations, all motorists are hereby notified to check registration guidelines on speed limits."
-(Reason: Rejects because it sounds like a legalistic Gazette Notice).
 
-✔️ Good PSA (Routine Advice):
-"Clean your hands thoroughly before preparing food to protect your family from waterborne disease outbreaks."
-(Reason: Direct, concise, commands a clear public action, 14 words).
-
-✔️ Good PSA (Emergency Warning - Two Sentences Allowed):
-"Heavy rainfall is expected this week. Avoid crossing flooded rivers and follow local safety guidance."
-(Reason: Two short sentences, urgent, commands action, 16 words).
+✔️ Good Authentic Kenyan PSAs (Routine / Emergency):
+- "Bridge the gap! Build more schools in rural areas like Kitui."
+- "Bursary application portal now open for needy students in all 47 counties."
+- "15,000 full secondary scholarships for arid counties – apply before Nov 30 via county office!"
+- "Apply for TVET bursaries by March 15 via HELB portal."
+- "All boarding schools must conduct safety audit by September 30, 2025."
+- "Heavy rainfall is expected this week. Avoid crossing flooded rivers and follow local safety guidance."
 """
 
 class AzureOpenAIGenerator:
