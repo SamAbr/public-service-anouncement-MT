@@ -172,25 +172,6 @@ def main():
                         print(f"Warning: FastText prediction failed ({e}). Disabling Language ID filter for this run.")
                         ft_model = None
                 
-                # Filter 2: Back-Translation round trip
-                inputs_back = tokenizer([target_text], return_tensors="pt", padding=True, truncation=True).to(device)
-                with torch.no_grad():
-                    back_tokens = model.generate(
-                        **inputs_back,
-                        forced_bos_token_id=eng_lang_id,
-                        max_length=64,
-                        num_beams=1
-                    )
-                back_english = tokenizer.batch_decode(back_tokens, skip_special_tokens=True)[0]
-                
-                # Calculate ChrF score
-                chrf_val = 1.0
-                if nltk is not None:
-                    chrf_val = sentence_chrf(original_english, back_english)
-                
-                if chrf_val < args.min_chrf:
-                    print(f"Row {original_idx} Warning: Low back-translation ChrF ({chrf_val:.3f}). Keep but flag.")
-                
                 final_translations.append(target_text)
                 
             # Write batch translations back to DataFrame
