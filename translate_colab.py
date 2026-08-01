@@ -124,6 +124,11 @@ def main():
             batch_idx = untranslated_indices[b * args.batch_size : (b + 1) * args.batch_size]
             batch_texts = [english_texts[idx] for idx in batch_idx]
             
+            # Print periodic progress logs
+            if b % 10 == 0 or b == num_batches - 1:
+                print(f"[{col_name}] Translated batch {b + 1}/{num_batches} (Processed {min((b + 1) * args.batch_size, len(untranslated_indices))} / {len(untranslated_indices)} records)...")
+
+            
             # Forward translation: English -> Target
             inputs = tokenizer(batch_texts, return_tensors="pt", padding=True, truncation=True).to(device)
             with torch.no_grad():
