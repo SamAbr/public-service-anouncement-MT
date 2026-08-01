@@ -22,25 +22,44 @@ def main():
     # Set seed
     set_seed(args.seed)
 
-    # Initialize generator with selected engine and credentials
+    # Load existing CSV to calculate start counts and prepare for appending
+    start_counts = {}
+    df_existing = pd.DataFrame()
+    if os.path.exists(args.output):
+        try:
+            df_existing = pd.read_csv(args.output)
+            if not df_existing.empty and "Domain" in df_existing.columns:
+                start_counts = df_existing.groupby("Domain").size().to_dict()
+                print(f"Detected existing records in '{args.output}'. Start offsets: {start_counts}")
+        except Exception as e:
+            print(f"Warning: Failed to load existing CSV: {e}. Starting fresh.")
+
+    # Initialize generator with selected engine, credentials, and start counts
     generator = PSAGenerator(
         size=args.size,
         translator=None,
         engine=args.engine,
         azure_api_key=args.azure_key,
         azure_endpoint=args.azure_endpoint,
-        azure_deployment=args.azure_deployment
+        azure_deployment=args.azure_deployment,
+        start_counts=start_counts
     )
     
     # Generate English PSAs
     print(f"Generating {args.size} unique validated English PSAs using engine: '{args.engine}'...")
     english_records = generator.generate_english_psas()
     
-    # Save to CSV
+    # Merge and save to CSV
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    df = pd.DataFrame(english_records)
-    df.to_csv(args.output, index=False, encoding="utf-8")
-    print(f"Saved {len(df)} English records to {args.output}")
+    df_new = pd.DataFrame(english_records)
+    
+    if not df_existing.empty:
+        df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+    else:
+        df_combined = df_new
+        
+    df_combined.to_csv(args.output, index=False, encoding="utf-8")
+    print(f"Successfully appended {len(df_new)} records. Total records in '{args.output}': {len(df_combined)}")
 
 if __name__ == "__main__":
     main()

@@ -14,7 +14,7 @@ from .templates.families import TEMPLATE_FAMILIES, DOMAIN_OPENINGS
 
 class PSAGenerator:
     def __init__(self, size=50000, translator=None, checkpoint_file=None, engine="templates",
-                 azure_api_key=None, azure_endpoint=None, azure_deployment=None):
+                 azure_api_key=None, azure_endpoint=None, azure_deployment=None, start_counts=None):
         self.size = size
         self.target_per_domain = size // len(DOMAINS)
         self.grammar_engine = ControlledGrammarEngine()
@@ -22,6 +22,7 @@ class PSAGenerator:
         self.translator = translator if translator else NLLBTranslator()
         self.checkpoint_file = checkpoint_file if checkpoint_file else CHECKPOINT_FILE
         self.engine = engine
+        self.start_counts = start_counts or {}
         
         self.llm_generator = None
         if self.engine == "azure_llm":
@@ -130,12 +131,15 @@ class PSAGenerator:
                 }
                 
                 completed_count = 0
+                domain_counters = {d: 0 for d in DOMAINS}
+                
                 for future in as_completed(futures):
                     config, prefix = futures[future]
                     try:
                         batch_records = future.result()
                         for record in batch_records:
-                            self.stats["domain"][config["domain"]] += 1
+                            domain = config["domain"]
+                            self.stats["domain"][domain] += 1
                             self.stats["scenario_id"][config["scenario_id"]] += 1
                             self.stats["intent"][config["intent"]] += 1
                             self.stats["severity"][config["severity"]] += 1
@@ -143,10 +147,12 @@ class PSAGenerator:
                             self.stats["tone"][config["tone"]] += 1
                             self.stats["distribution_channel"][config["distribution_channel"]] += 1
                             
-                            psa_id = f"PSA_{prefix}_{len(english_records) + 1:05d}"
+                            domain_counters[domain] += 1
+                            domain_count = self.start_counts.get(domain, 0) + domain_counters[domain]
+                            psa_id = f"PSA_{prefix}_{domain_count:05d}"
                             english_records.append({
                                 "PSA_Id": psa_id,
-                                "Domain": config["domain"],
+                                "Domain": domain,
                                 "Topic": config["topic"],
                                 "Subtopic": config["subtopic"],
                                 "Class": "PSA",
@@ -266,7 +272,8 @@ class PSAGenerator:
                 self.stats["tone"][tone] += 1
                 self.stats["distribution_channel"][channel] += 1
                 
-                psa_id = f"PSA_{domain_prefix}_{count+1:05d}"
+                domain_count = self.start_counts.get(domain, 0) + count + 1
+                psa_id = f"PSA_{domain_prefix}_{domain_count:05d}"
                 english_records.append({
                     "PSA_Id": psa_id,
                     "Domain": domain,
