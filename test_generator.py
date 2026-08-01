@@ -2,10 +2,12 @@ import unittest
 import os
 import shutil
 import tempfile
-from src.grammar import ControlledGrammarEngine
+from unittest.mock import patch, MagicMock
 from src.validator import ValidationEngine
 from src.exporter import Exporter
 from src.generator import PSAGenerator
+
+from src.llm_generator import AzureOpenAIGenerator
 
 class MockTranslator:
     def __init__(self, batch_size=32):
@@ -35,32 +37,6 @@ class TestPSAGenerator(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
-
-    def test_grammar_engine(self):
-        engine = ControlledGrammarEngine()
-        template = "{opening} {institution} {audience} {action_infinitive} {hazard} {location}."
-        opening = "Public Alert:"
-        institution = "Ministry of Health"
-        audience = "residents"
-        action_infinitive = "[boil] drinking water"
-        action_imperative = "[boil] drinking water"
-        action_noun = "[boil] drinking water"
-        hazard = "cholera outbreak"
-        location = "in cities"
-        
-        psa = engine.generate_psa(
-            template=template,
-            opening=opening,
-            institution=institution,
-            audience=audience,
-            action_infinitive=action_infinitive,
-            action_imperative=action_imperative,
-            action_noun=action_noun,
-            hazard=hazard,
-            location=location
-        )
-        self.assertIn("Public Alert: Ministry of Health residents", psa)
-        self.assertNotIn("[boil]", psa)  # Verify bracketed verb synonymized
 
     def test_validation_engine(self):
         validator = ValidationEngine(min_words=10, max_words=25)
@@ -109,10 +85,37 @@ class TestPSAGenerator(unittest.TestCase):
         is_valid_3, reason_3 = validator.validate(three_sentence)
         self.assertFalse(is_valid_3)
 
-    def test_full_pipeline_mocked(self):
+    @patch("src.llm_generator.AzureOpenAIGenerator.generate_batch")
+    @patch("src.llm_generator.AzureOpenAIGenerator.is_configured")
+    def test_full_pipeline_mocked(self, mock_is_configured, mock_generate_batch):
+        mock_is_configured.return_value = True
+        
+        # Set up a mock generator that returns valid records
+        def side_effect(config, batch_size):
+            domain = config["domain"]
+            return [
+                {
+                    "English": f"Official Alert: The {domain} authority advises the general public to follow guidelines immediately.",
+                    "intent": config["intent"],
+                    "severity": config["severity"],
+                    "syntactic_pattern": config["syntactic_pattern"],
+                    "lexical_profile": config["lexical_profile"],
+                    "word_count": 14
+                }
+                for _ in range(batch_size)
+            ]
+        mock_generate_batch.side_effect = side_effect
+
         # Generate 25 parallel records (5 per domain)
         test_checkpoint = os.path.join(self.temp_dir, "test_checkpoint.json")
-        generator = PSAGenerator(size=25, translator=self.mock_translator, checkpoint_file=test_checkpoint)
+        generator = PSAGenerator(
+            size=25,
+            translator=self.mock_translator,
+            checkpoint_file=test_checkpoint,
+            azure_api_key="mock_key",
+            azure_endpoint="mock_endpoint",
+            azure_deployment="mock_deployment"
+        )
         records = generator.generate_and_translate()
         
         self.assertEqual(len(records), 25)

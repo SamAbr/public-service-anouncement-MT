@@ -1,16 +1,22 @@
 import os
 import argparse
 import pandas as pd
-from src.config import DEFAULT_SIZE, RANDOM_SEED
-from src.utils import set_seed
 from src.generator import PSAGenerator
+
+DEFAULT_SIZE = 100
+RANDOM_SEED = 42
+
+def set_seed(seed):
+    import random
+    import numpy as np
+    random.seed(seed)
+    np.random.seed(seed)
 
 def main():
     parser = argparse.ArgumentParser(description="Generate English PSAs for Colab Translation")
     parser.add_argument("--size", type=int, default=DEFAULT_SIZE, help="Total number of PSA records to generate")
     parser.add_argument("--output", type=str, default="output/english_psas.csv", help="Path to output English CSV file")
     parser.add_argument("--seed", type=int, default=RANDOM_SEED, help="Random seed for reproducibility")
-    parser.add_argument("--engine", type=str, default="templates", choices=["templates", "azure_llm"], help="Generation engine: templates or azure_llm")
     
     # Azure OpenAI credentials
     parser.add_argument("--azure-key", type=str, default=None, help="Azure OpenAI API Key")
@@ -22,6 +28,24 @@ def main():
     # Set seed
     set_seed(args.seed)
 
+    # Enforce Azure OpenAI credentials
+    azure_key = args.azure_key or os.getenv("AZURE_OPENAI_API_KEY")
+    if not azure_key:
+        raise ValueError(
+            "Azure API Key is required for generation. "
+            "Please provide it via --azure-key or set the AZURE_OPENAI_API_KEY environment variable."
+        )
+
+    # Initialize generator with selected engine (forced to azure_llm) and credentials
+    generator = PSAGenerator(
+        size=args.size,
+        translator=None,
+        engine="azure_llm",
+        azure_api_key=azure_key,
+        azure_endpoint=args.azure_endpoint,
+        azure_deployment=args.azure_deployment
+    )
+    
     # Load existing CSV to calculate start counts and prepare for appending
     start_counts = {}
     df_existing = pd.DataFrame()
@@ -31,22 +55,13 @@ def main():
             if not df_existing.empty and "Domain" in df_existing.columns:
                 start_counts = df_existing.groupby("Domain").size().to_dict()
                 print(f"Detected existing records in '{args.output}'. Start offsets: {start_counts}")
+                # Update generator start counts
+                generator.start_counts = start_counts
         except Exception as e:
             print(f"Warning: Failed to load existing CSV: {e}. Starting fresh.")
-
-    # Initialize generator with selected engine, credentials, and start counts
-    generator = PSAGenerator(
-        size=args.size,
-        translator=None,
-        engine=args.engine,
-        azure_api_key=args.azure_key,
-        azure_endpoint=args.azure_endpoint,
-        azure_deployment=args.azure_deployment,
-        start_counts=start_counts
-    )
     
     # Generate English PSAs
-    print(f"Generating {args.size} unique validated English PSAs using engine: '{args.engine}'...")
+    print(f"Generating {args.size} unique validated English PSAs using Azure LLM engine (ChatGPT)...")
     english_records = generator.generate_english_psas()
     
     # Merge and save to CSV
