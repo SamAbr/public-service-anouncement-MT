@@ -61,10 +61,118 @@ class PSAGenerator:
     def generate_english_psas(self):
         """
         Generates the target number of unique, valid English PSAs.
-        Supports both template-based grammar engine and Azure OpenAI (GPT-4o) backend.
+        Supports both template-based grammar engine and concurrent Azure OpenAI (GPT-4o) backend.
         """
         english_records = []
         
+        if self.engine == "azure_llm" and self.llm_generator and self.llm_generator.is_configured():
+            batch_size = 20
+            tasks = []
+            
+            for domain in DOMAINS:
+                scenarios = SCENARIOS.get(domain, [])
+                if not scenarios:
+                    continue
+                
+                domain_prefix = domain.split()[0][:3].upper()
+                count = 0
+                while count < self.target_per_domain:
+                    # Select scenario & build config
+                    scenario = self._select_balanced_choice(scenarios, "scenario_id")
+                    rel = random.choice(scenario.relationships)
+                    inst = INSTITUTIONS.get(rel.institution_id)
+                    aud_id = random.choice(rel.audience_ids)
+                    aud = AUDIENCES.get(aud_id)
+                    act = next((a for a in scenario.actions if a.id in rel.action_ids), None)
+                    haz = next((h for h in scenario.hazards if h.id in rel.hazard_ids), None)
+                    
+                    if not all([inst, aud, act, haz]):
+                        continue
+                        
+                    loc = random.choice(scenario.locations)
+                    intent = self._select_balanced_choice(list(TEMPLATE_FAMILIES.keys()), "intent")
+                    severity = self._select_balanced_choice(list(TEMPLATE_FAMILIES[intent].keys()), "severity")
+                    pattern = self._select_balanced_choice(list(TEMPLATE_FAMILIES[intent][severity].keys()), "syntactic_pattern")
+                    tone = self._select_balanced_choice(["Informational", "Urgent", "Authoritative", "Community-outreach"], "tone")
+                    channel = self._select_balanced_choice(["Radio", "SMS", "Poster", "Social Media"], "distribution_channel")
+                    lexical_profile = "Emergency" if severity == "Emergency" else ("Formal" if intent == "Warning" else "Community outreach")
+                    
+                    scenario_config = {
+                        "domain": domain,
+                        "topic": scenario.topic,
+                        "subtopic": scenario.subtopic,
+                        "scenario_id": scenario.id,
+                        "institution": inst.name,
+                        "audience": aud.name,
+                        "audience_name": aud.name,
+                        "hazard": haz.name,
+                        "location": loc.name,
+                        "intent": intent,
+                        "severity": severity,
+                        "syntactic_pattern": pattern,
+                        "lexical_profile": lexical_profile,
+                        "tone": tone,
+                        "distribution_channel": channel
+                    }
+                    
+                    batch_to_request = min(batch_size, self.target_per_domain - count)
+                    tasks.append((scenario_config, batch_to_request, domain_prefix))
+                    count += batch_to_request
+
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            max_workers = 10
+            print(f"Starting parallel LLM generation of {self.size} PSAs with {max_workers} concurrent workers...")
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(self.llm_generator.generate_batch, config, req_size): (config, prefix)
+                    for config, req_size, prefix in tasks
+                }
+                
+                completed_count = 0
+                for future in as_completed(futures):
+                    config, prefix = futures[future]
+                    try:
+                        batch_records = future.result()
+                        for record in batch_records:
+                            self.stats["domain"][config["domain"]] += 1
+                            self.stats["scenario_id"][config["scenario_id"]] += 1
+                            self.stats["intent"][config["intent"]] += 1
+                            self.stats["severity"][config["severity"]] += 1
+                            self.stats["syntactic_pattern"][config["syntactic_pattern"]] += 1
+                            self.stats["tone"][config["tone"]] += 1
+                            self.stats["distribution_channel"][config["distribution_channel"]] += 1
+                            
+                            psa_id = f"PSA_{prefix}_{len(english_records) + 1:05d}"
+                            english_records.append({
+                                "PSA_Id": psa_id,
+                                "Domain": config["domain"],
+                                "Topic": config["topic"],
+                                "Subtopic": config["subtopic"],
+                                "Class": "PSA",
+                                "English": record["English"],
+                                "Kiswahili": "",
+                                "Somali": "",
+                                "Luo": "",
+                                "is_synthetic": True,
+                                "model_version": "NLLB-200",
+                                "scenario_id": config["scenario_id"],
+                                "intent": record["intent"],
+                                "severity": record["severity"],
+                                "syntactic_pattern": record["syntactic_pattern"],
+                                "lexical_profile": record["lexical_profile"],
+                                "word_count": record["word_count"]
+                            })
+                            completed_count += 1
+                            if completed_count % 100 == 0:
+                                print(f"Progress: Generated and validated {completed_count} / {self.size} PSAs...")
+                    except Exception as e:
+                        print(f"Batch generation error: {e}")
+                        
+            print(f"Parallel LLM generation complete! Total generated: {len(english_records)}")
+            return english_records
+
+        # Offline template generation fallback
         for domain in DOMAINS:
             print(f"Generating English PSAs for domain: '{domain}'...")
             scenarios = SCENARIOS.get(domain, [])
@@ -74,6 +182,7 @@ class PSAGenerator:
             count = 0
             attempts = 0
             max_attempts = self.target_per_domain * 25  # Safeguard limits
+            domain_prefix = domain.split()[0][:3].upper()
             
             while count < self.target_per_domain and attempts < max_attempts:
                 attempts += 1
@@ -112,133 +221,73 @@ class PSAGenerator:
                 pattern = self._select_balanced_choice(list(TEMPLATE_FAMILIES[intent][severity].keys()), "syntactic_pattern")
                 tone = self._select_balanced_choice(["Informational", "Urgent", "Authoritative", "Community-outreach"], "tone")
                 channel = self._select_balanced_choice(["Radio", "SMS", "Poster", "Social Media"], "distribution_channel")
-                
                 lexical_profile = "Emergency" if severity == "Emergency" else ("Formal" if intent == "Warning" else "Community outreach")
                 
-                # Domain prefix for PSA IDs
-                domain_prefix = domain.split()[0][:3].upper()
+                # Template-based realization fallback
+                templates_list = TEMPLATE_FAMILIES[intent][severity][pattern]
+                template = self._select_balanced_choice(templates_list, "template_use")
+                openings = DOMAIN_OPENINGS.get(domain, ["Official Advisory:"])
+                opening = random.choice(openings)
                 
-                if self.engine == "azure_llm" and self.llm_generator and self.llm_generator.is_configured():
-                    # Batch generate from LLM
-                    scenario_config = {
-                        "domain": domain,
-                        "topic": scenario.topic,
-                        "subtopic": scenario.subtopic,
-                        "scenario_id": scenario.id,
-                        "institution": inst.name,
-                        "audience": aud.name,
-                        "audience_name": aud.name,
-                        "hazard": haz.name,
-                        "location": loc.name,
-                        "intent": intent,
-                        "severity": severity,
-                        "syntactic_pattern": pattern,
-                        "lexical_profile": lexical_profile,
-                        "tone": tone,
-                        "distribution_channel": channel
-                    }
+                english_text = self.grammar_engine.generate_psa(
+                    template=template,
+                    opening=opening,
+                    institution=inst.name,
+                    audience=aud.name,
+                    action_infinitive=act.infinitive,
+                    action_imperative=act.imperative,
+                    action_noun=act.noun,
+                    hazard=haz.name,
+                    location=loc.name,
+                    terminology=term,
+                    season=context.season
+                )
+                
+                # Grammar cleanup: remove duplicate "to to"
+                while "to to" in english_text:
+                    english_text = english_text.replace("to to", "to")
+                while "  " in english_text:
+                    english_text = english_text.replace("  ", " ")
+                
+                is_valid, reason = self.validator.validate(english_text)
+                if not is_valid:
+                    continue
                     
-                    batch_to_request = min(5, self.target_per_domain - count)
-                    batch_records = self.llm_generator.generate_batch(scenario_config, batch_size=batch_to_request)
+                if not self.validator.is_semantically_unique(english_text, threshold=0.92):
+                    continue
                     
-                    for record in batch_records:
-                        english_text = record["English"]
-                        # Success: Register metrics & build record
-                        self.stats["domain"][domain] += 1
-                        self.stats["scenario_id"][scenario.id] += 1
-                        self.stats["intent"][intent] += 1
-                        self.stats["severity"][severity] += 1
-                        self.stats["syntactic_pattern"][pattern] += 1
-                        self.stats["tone"][tone] += 1
-                        self.stats["distribution_channel"][channel] += 1
-                        
-                        psa_id = f"PSA_{domain_prefix}_{count+1:05d}"
-                        english_records.append({
-                            "PSA_Id": psa_id,
-                            "Domain": domain,
-                            "Topic": scenario.topic,
-                            "Subtopic": scenario.subtopic,
-                            "Class": "PSA",
-                            "English": english_text,
-                            "Kiswahili": "",
-                            "Somali": "",
-                            "Luo": "",
-                            "is_synthetic": True,
-                            "model_version": "NLLB-200",
-                            "scenario_id": scenario.id,
-                            "intent": record["intent"],
-                            "severity": record["severity"],
-                            "syntactic_pattern": record["syntactic_pattern"],
-                            "lexical_profile": record["lexical_profile"],
-                            "word_count": record["word_count"]
-                        })
-                        count += 1
-                else:
-                    # Template-based realization fallback
-                    templates_list = TEMPLATE_FAMILIES[intent][severity][pattern]
-                    template = self._select_balanced_choice(templates_list, "template_use")
-                    openings = DOMAIN_OPENINGS.get(domain, ["Official Advisory:"])
-                    opening = random.choice(openings)
-                    
-                    english_text = self.grammar_engine.generate_psa(
-                        template=template,
-                        opening=opening,
-                        institution=inst.name,
-                        audience=aud.name,
-                        action_infinitive=act.infinitive,
-                        action_imperative=act.imperative,
-                        action_noun=act.noun,
-                        hazard=haz.name,
-                        location=loc.name,
-                        terminology=term,
-                        season=context.season
-                    )
-                    
-                    # Grammar cleanup: remove duplicate "to to"
-                    while "to to" in english_text:
-                        english_text = english_text.replace("to to", "to")
-                    while "  " in english_text:
-                        english_text = english_text.replace("  ", " ")
-                    
-                    is_valid, reason = self.validator.validate(english_text)
-                    if not is_valid:
-                        continue
-                        
-                    if not self.validator.is_semantically_unique(english_text, threshold=0.92):
-                        continue
-                        
-                    # Register stats
-                    self.stats["domain"][domain] += 1
-                    self.stats["scenario_id"][scenario.id] += 1
-                    self.stats["intent"][intent] += 1
-                    self.stats["severity"][severity] += 1
-                    self.stats["syntactic_pattern"][pattern] += 1
-                    self.stats["template_use"][template] += 1
-                    self.stats["tone"][tone] += 1
-                    self.stats["distribution_channel"][channel] += 1
-                    
-                    psa_id = f"PSA_{domain_prefix}_{count+1:05d}"
-                    english_records.append({
-                        "PSA_Id": psa_id,
-                        "Domain": domain,
-                        "Topic": scenario.topic,
-                        "Subtopic": scenario.subtopic,
-                        "Class": "PSA",
-                        "English": english_text,
-                        "Kiswahili": "",
-                        "Somali": "",
-                        "Luo": "",
-                        "is_synthetic": True,
-                        "model_version": "NLLB-200",
-                        "scenario_id": scenario.id,
-                        "intent": intent,
-                        "severity": severity,
-                        "syntactic_pattern": pattern,
-                        "lexical_profile": lexical_profile,
-                        "word_count": len(english_text.split())
-                    })
-                    count += 1
-                    
+                # Register stats
+                self.stats["domain"][domain] += 1
+                self.stats["scenario_id"][scenario.id] += 1
+                self.stats["intent"][intent] += 1
+                self.stats["severity"][severity] += 1
+                self.stats["syntactic_pattern"][pattern] += 1
+                self.stats["template_use"][template] += 1
+                self.stats["tone"][tone] += 1
+                self.stats["distribution_channel"][channel] += 1
+                
+                psa_id = f"PSA_{domain_prefix}_{count+1:05d}"
+                english_records.append({
+                    "PSA_Id": psa_id,
+                    "Domain": domain,
+                    "Topic": scenario.topic,
+                    "Subtopic": scenario.subtopic,
+                    "Class": "PSA",
+                    "English": english_text,
+                    "Kiswahili": "",
+                    "Somali": "",
+                    "Luo": "",
+                    "is_synthetic": True,
+                    "model_version": "NLLB-200",
+                    "scenario_id": scenario.id,
+                    "intent": intent,
+                    "severity": severity,
+                    "syntactic_pattern": pattern,
+                    "lexical_profile": lexical_profile,
+                    "word_count": len(english_text.split())
+                })
+                count += 1
+                
             print(f"Generated {count} English records for '{domain}' after {attempts} attempts.")
             
         return english_records

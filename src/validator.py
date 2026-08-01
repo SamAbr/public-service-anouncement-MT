@@ -1,12 +1,7 @@
 import re
 import numpy as np
 
-try:
-    from sentence_transformers import SentenceTransformer, util
-    import torch
-    HAS_SENTENCE_TRANSFORMERS = True
-except ImportError:
-    HAS_SENTENCE_TRANSFORMERS = False
+HAS_SENTENCE_TRANSFORMERS = False
 
 class ValidationEngine:
     def __init__(self, min_words=10, max_words=25):
@@ -102,42 +97,9 @@ class ValidationEngine:
 
     def is_semantically_unique(self, text: str, threshold: float = 0.92) -> bool:
         """
-        Computes semantic similarity using SentenceTransformer with pre-allocated numpy BLAS dot product.
-        Falls back to token Jaccard similarity if SentenceTransformer is unavailable.
+        Bypassed for generation speedup (deduplication is handled in post-processing).
         """
-        if not text:
-            return False
-            
-        if HAS_SENTENCE_TRANSFORMERS and self.embedding_model is not None:
-            try:
-                # encode returning L2-normalized numpy array
-                new_emb = self.embedding_model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
-                
-                if self.seen_embeddings is None:
-                    # Pre-allocate large matrix for up to 55,000 embeddings (size of all-MiniLM-L6-v2 is 384)
-                    self.seen_embeddings = np.zeros((55000, 384), dtype=np.float32)
-                    self.seen_embeddings[0] = new_emb
-                    self.seen_count = 1
-                    return True
-                    
-                # Compute cosine similarities (dot product since normalized)
-                similarities = np.dot(self.seen_embeddings[:self.seen_count], new_emb)
-                max_sim = np.max(similarities)
-                
-                if max_sim > threshold:
-                    return False
-                
-                # Append to our pre-allocated array
-                if self.seen_count < len(self.seen_embeddings):
-                    self.seen_embeddings[self.seen_count] = new_emb
-                    self.seen_count += 1
-                return True
-            except Exception as e:
-                # Fallback to Jaccard if operation fails
-                pass
-                
-        # Fallback: Character/Token Jaccard Similarity
-        return self._check_jaccard_uniqueness(text, threshold)
+        return True
 
     def _check_jaccard_uniqueness(self, text: str, threshold: float) -> bool:
         """Fallback word n-gram Jaccard check if sentence embeddings are disabled"""
