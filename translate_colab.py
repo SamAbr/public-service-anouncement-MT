@@ -143,25 +143,29 @@ def main():
                 
                 # Filter 1: Off-target Language ID check
                 if ft_model is not None:
-                    # Clean newlines for fasttext
-                    cleaned_text = target_text.replace("\n", " ")
-                    predictions = ft_model.predict(cleaned_text, k=3)
-                    pred_labels = [label.replace("__label__", "") for label in predictions[0]]
-                    
-                    # Luo prediction can sometimes be classified as related Nilotic/African languages if short,
-                    # so we verify if the target label is in the top 3 predictions
-                    if fasttext_code not in pred_labels:
-                        print(f"Row {original_idx} rejected: LangID failed for {col_name}. Got {pred_labels}, expected '{fasttext_code}'. Retrying translation with beam search...")
-                        # Fallback retry with beam search
-                        inputs_single = tokenizer([original_english], return_tensors="pt").to(device)
-                        with torch.no_grad():
-                            tokens_retry = model.generate(
-                                **inputs_single,
-                                forced_bos_token_id=tgt_lang_id,
-                                max_length=64,
-                                num_beams=3
-                            )
-                        target_text = tokenizer.batch_decode(tokens_retry, skip_special_tokens=True)[0]
+                    try:
+                        # Clean newlines for fasttext
+                        cleaned_text = target_text.replace("\n", " ")
+                        predictions = ft_model.predict(cleaned_text, k=3)
+                        pred_labels = [label.replace("__label__", "") for label in predictions[0]]
+                        
+                        # Luo prediction can sometimes be classified as related Nilotic/African languages if short,
+                        # so we verify if the target label is in the top 3 predictions
+                        if fasttext_code not in pred_labels:
+                            print(f"Row {original_idx} rejected: LangID failed for {col_name}. Got {pred_labels}, expected '{fasttext_code}'. Retrying translation with beam search...")
+                            # Fallback retry with beam search
+                            inputs_single = tokenizer([original_english], return_tensors="pt").to(device)
+                            with torch.no_grad():
+                                tokens_retry = model.generate(
+                                    **inputs_single,
+                                    forced_bos_token_id=tgt_lang_id,
+                                    max_length=64,
+                                    num_beams=3
+                                )
+                            target_text = tokenizer.batch_decode(tokens_retry, skip_special_tokens=True)[0]
+                    except Exception as e:
+                        print(f"Warning: FastText prediction failed ({e}). Disabling Language ID filter for this run.")
+                        ft_model = None
                 
                 # Filter 2: Back-Translation round trip
                 inputs_back = tokenizer([target_text], return_tensors="pt", padding=True, truncation=True).to(device)
