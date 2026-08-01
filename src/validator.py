@@ -60,6 +60,16 @@ class ValidationEngine:
 
         lower_text = text.lower()
 
+        # Strict Style Rejection Rules (to match PSA_KE_Final.csv punchy active style):
+        # 1. Reject conditional starts
+        if text.startswith(("If ", "If you ", "If eligible", "If facing", "If you're")):
+            return False, "Violates punchy style: starts with conditional 'If' clause (e.g. 'If HELB...')."
+
+        # 2. Reject passive voice subject openings (e.g. "registering is advised", "to register is required")
+        if re.match(r'^(to\s+\w+|\w+ing)\s+is\s+(advised|recommended|required|highly|urgently)', lower_text):
+            return False, "Violates active style: uses passive gerund/infinitive subject structure."
+
+
         # 4. PSA Framework Decision Tree Rule 1: Must tell the public to take action, avoid something, or be alert
         psa_keywords = ["advise", "urge", "warn", "remind", "request", "inform", "deadline", "alert", "verify", "submit", "report", "avoid", "comply", "register", "apply", "check", "secure", "require", "recommend", "need", "must", "should", "always", "protect", "prevent"]
         if not any(kw in lower_text for kw in psa_keywords):
