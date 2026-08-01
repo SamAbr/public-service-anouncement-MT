@@ -1,8 +1,6 @@
 # Simplified Template Families mapped by (Intent, Severity, SyntacticPattern)
 # Designed to remain strictly within the 10-25 word boundary for authentic PSAs.
-
-# Simplified Template Families mapped by (Intent, Severity, SyntacticPattern)
-# Designed to remain strictly within the 10-25 word boundary for authentic PSAs.
+# Adjusted to be 100% active, punchy, and free of clunky conditional 'If' or passive voice subjects.
 
 DOMAIN_OPENINGS = {
     "Education": ["Ministry Notice:", "Official Advisory:", "Education Notice:", "Public Notice:"],
@@ -23,10 +21,10 @@ TEMPLATE_FAMILIES = {
                 "{opening} {institution} directs all {audience} to immediately {action_infinitive}."
             ],
             "Passive": [
-                "{opening} {action_noun} is urgently required for all {audience} {location}."
+                "{opening} {institution} urgently requires {audience} to {action_infinitive} {location}."
             ],
             "Conditional": [
-                "{opening} If facing {hazard}, {audience} must immediately {action_infinitive}."
+                "{opening} {audience} must immediately {action_infinitive} when facing {hazard}."
             ]
         },
         "Warning": {
@@ -38,10 +36,10 @@ TEMPLATE_FAMILIES = {
                 "{opening} {institution} directs {audience} to {action_infinitive}."
             ],
             "Passive": [
-                "{opening} {action_noun} is advised {location} to safeguard {audience}."
+                "{opening} {institution} advises {audience} to {action_infinitive} to safeguard against {hazard}."
             ],
             "Conditional": [
-                "{opening} If facing {hazard}, {audience} should {action_infinitive}."
+                "{opening} {audience} should {action_infinitive} when facing {hazard}."
             ]
         }
     },
@@ -55,10 +53,10 @@ TEMPLATE_FAMILIES = {
                 "{opening} {institution} reminds {audience} to {action_infinitive}."
             ],
             "Passive": [
-                "{opening} {action_noun} is required from {audience} before the deadline."
+                "{opening} {institution} requires {audience} to {action_infinitive} before the deadline."
             ],
             "Conditional": [
-                "{opening} If eligible, {audience} should {action_infinitive}."
+                "{opening} Eligible {audience} are requested to {action_infinitive}."
             ]
         }
     },
@@ -72,10 +70,10 @@ TEMPLATE_FAMILIES = {
                 "{opening} {institution} advises {audience} to {action_infinitive}."
             ],
             "Passive": [
-                "{opening} {action_noun} is highly recommended for {audience}."
+                "{opening} {institution} highly recommends {audience} to {action_infinitive}."
             ],
             "Conditional": [
-                "{opening} If you are {audience}, you are encouraged to {action_infinitive}."
+                "{opening} {audience} are encouraged to {action_infinitive}."
             ]
         }
     }

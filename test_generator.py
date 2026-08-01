@@ -31,7 +31,7 @@ class TestPSAGenerator(unittest.TestCase):
         self.output_csv = os.path.join(self.temp_dir, "test_output.csv")
         self.mock_translator = MockTranslator()
         import random
-        random.seed(42)
+        random.seed(0)
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
