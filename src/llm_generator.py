@@ -113,12 +113,12 @@ class AzureOpenAIGenerator:
 
 ### Instructions:
 Generate a list of {batch_size} independent public service announcements.
-Each PSA must:
-- Be directed at {scenario_config['audience']}.
+- Speak directly to {scenario_config['audience']} but do NOT explicitly write their group name (like "members of the public", "candidates", "farmers", etc.) inside the sentence as a tag or suffix. The audience should be natural and implied by context.
 - Command a public action.
 - Use plain, simple English suitable for translation.
 - Contain between 10 to 25 words.
 - STRICT NEGATIVE CONSTRAINT: Do NOT start any sentence with "If", "If you", "If eligible", or "If facing". 
+- STRICT NEGATIVE CONSTRAINT: Do NOT append or embed trailing vocative tags (e.g. reject: "..., members of the public" or "..., candidates").
 - STRICT STYLE RULE: Write punchy, active sentences that start directly with an imperative command (e.g. "Apply for...", "Verify your...", "Report...", "Avoid...") or a direct statement (e.g. "All students get..."). Do NOT use passive gerund subjects (e.g. "registering is advised").
 """
 

@@ -69,6 +69,11 @@ class ValidationEngine:
         if re.match(r'^(to\s+\w+|\w+ing)\s+is\s+(advised|recommended|required|highly|urgently)', lower_text):
             return False, "Violates active style: uses passive gerund/infinitive subject structure."
 
+        # 3. Reject artificial vocative trailing/embedded audience tags (e.g., ", members of the public", ", candidates")
+        if re.search(r',\s*(members of the|general public|candidates|farmers|pastoralists|motorists|citizens|households|parents|pupils|students)\.?\s*$', lower_text) or ", members of" in lower_text or ", general public" in lower_text:
+            return False, "Violates natural style: contains artificial trailing or embedded audience tag (e.g. ', members of the public')."
+
+
 
         # 4. PSA Framework Decision Tree Rule 1: Must tell the public to take action, avoid something, or be alert
         psa_keywords = ["advise", "urge", "warn", "remind", "request", "inform", "deadline", "alert", "verify", "submit", "report", "avoid", "comply", "register", "apply", "check", "secure", "require", "recommend", "need", "must", "should", "always", "protect", "prevent"]
