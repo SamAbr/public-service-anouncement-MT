@@ -56,10 +56,20 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Running translation on device: '{device}'")
 
-    # Read/Initialize parallel dataset (supporting resumability)
+    # Read/Initialize parallel dataset (supporting resumability with validation)
     if os.path.exists(args.output):
-        print(f"Resuming translation using existing parallel dataset: '{args.output}'")
-        df = pd.read_csv(args.output)
+        df_input = pd.read_csv(args.input)
+        try:
+            df_output = pd.read_csv(args.output)
+            if "English" in df_output.columns and len(df_output) == len(df_input) and df_output["English"].equals(df_input["English"]):
+                print(f"Resuming translation using existing parallel dataset: '{args.output}'")
+                df = df_output
+            else:
+                print(f"Existing parallel dataset '{args.output}' does not match input English dataset '{args.input}'. Initializing fresh translation.")
+                df = df_input
+        except Exception:
+            print(f"Failed to read existing output file. Initializing fresh translation from '{args.input}'")
+            df = df_input
     else:
         print(f"Initializing new parallel dataset from '{args.input}'")
         df = pd.read_csv(args.input)
