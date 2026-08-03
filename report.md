@@ -62,3 +62,22 @@ Once the English seed set was completed, it was sequentially translated into thr
 * **Format**: 17-column CSV:
   * `PSA_Id`, `Domain`, `Topic`, `Subtopic`, `Class`, `English`, `Kiswahili`, `Somali`, `Luo`, `is_synthetic`, `model_version`, `scenario_id`, `intent`, `severity`, `syntactic_pattern`, `lexical_profile`, `word_count`.
 * **Style**: Conversational, action-oriented, direct command sentences tailored specifically to Kenyan public service messaging.
+
+---
+
+## 4. Ekegusii Translation Integration
+
+For the expansion of the dataset to include **Ekegusii (Kisii)**, a low-resource Bantu language, we designed a **Retrieval-Augmented Few-Shot Translation** system.
+
+### Seed Corpus Sources
+Because Ekegusii lacks large general parallel datasets, we hand-curated a seed corpus of 14 highly diverse, grammatically verified English-Ekegusii sentence pairs from two primary authoritative sources:
+1. **The Ekegusii Revised Bible (*EBIBILIA ENCHENU*)**: Provides formal, command-based grammatical structures (e.g. Genesis 1:1, Matthew 6:33, Psalms 23:1, John 3:16).
+2. **The "Four Spiritual Laws" Tract (`4laws.com/laws/ekegusii`)**: Hand-aligned contemporary prose translated by native speakers.
+
+### Dynamic Few-Shot Retrieval Architecture
+Instead of using a static, domain-agnostic few-shot prompt (which fails to teach domain-specific terms to LLMs), we built a Jaccard word-similarity search system:
+1. For each input PSA, the system computes the token overlap similarity between the input English sentence and all English sentences in our seed corpus.
+2. It retrieves the **top 3 most semantically similar** English-Ekegusii sentence pairs.
+3. It constructs a customized, domain-relevant few-shot context block (injecting these 3 pairs) into the LLM system prompt.
+4. The prompt is dispatched to the LLM (e.g., GPT-5.1 mini / GPT-4o mini) to produce high-fidelity translations aligned with the requested style.
+
