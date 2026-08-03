@@ -142,10 +142,11 @@ def main():
     parser.add_argument("--output", type=str, default="output/psa_parallel_dataset.csv", help="Output parallel CSV file")
     parser.add_argument("--api-key", type=str, default=None, help="OpenAI / Azure API Key")
     parser.add_argument("--endpoint", type=str, default=None, help="API Endpoint URL (if using custom/Azure endpoint)")
-    parser.add_argument("--model", type=str, default="gpt-4o-mini", help="Model name to use (e.g. gpt-4o-mini)")
+    parser.add_argument("--model", type=str, default="gpt-5-mini", help="Model name to use (e.g. gpt-5-mini)")
     parser.add_argument("--workers", type=int, default=10, help="Number of concurrent translation workers")
     parser.add_argument("--batch-save", type=int, default=100, help="Save to CSV every N translated records")
     parser.add_argument("--domain", type=str, default=None, help="Filter translation to a specific domain (e.g., Health, Agriculture, Security, Education, Governance)")
+    parser.add_argument("--limit", type=int, default=None, help="Maximum number of records to translate in this run (for phased execution)")
     args = parser.parse_args()
 
     api_key = args.api_key or os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY")
@@ -195,7 +196,14 @@ def main():
     print(f"Starting domain-specific static few-shot translation to Ekegusii (first 15k + last 15k only).")
     print(f"Domains to process: {domains_to_process}")
 
+    limit = args.limit
+    translated_this_run = 0
+
     for domain in domains_to_process:
+        if limit is not None and translated_this_run >= limit:
+            print(f"Reached limit of {limit} translations for this run. Stopping phase.")
+            break
+
         # Get prompt for this domain
         prompt = get_domain_prompt(domain)
         
@@ -206,13 +214,17 @@ def main():
         all_domain_untranslated = df[domain_mask & untranslated_mask].index.tolist()
         # Restrict to first 15k and last 15k subset
         target_indices = [idx for idx in all_domain_untranslated if idx in target_subset_indices]
-        total_for_domain = len(target_indices)
         
+        # Apply remaining phase limit
+        if limit is not None:
+            remaining_limit = limit - translated_this_run
+            target_indices = target_indices[:remaining_limit]
+
+        total_for_domain = len(target_indices)
         if total_for_domain == 0:
-            print(f"Domain '{domain}' has no remaining records in the target subset. Skipping.")
             continue
             
-        print(f"\n=== Translating Domain: '{domain}' ({total_for_domain} records remaining in subset) ===")
+        print(f"\n=== Translating Domain: '{domain}' ({total_for_domain} records in this phase) ===")
         
         completed_count = 0
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
@@ -227,6 +239,7 @@ def main():
                     translation = future.result()
                     if translation:
                         df.at[idx, "Ekegusii"] = translation
+                        translated_this_run += 1
                 except Exception as e:
                     print(f"Worker exception for row {idx} in domain {domain}: {e}")
                     
@@ -238,11 +251,22 @@ def main():
         df.to_csv(args.output, index=False, encoding="utf-8")
         print(f"Completed translation for domain '{domain}'.")
 
-    # Final save with shuffling (preserving alignment of translations)
-    print("\nShuffling the final dataset...")
-    df_shuffled = df.sample(frac=1, random_state=42).reset_index(drop=True)
-    df_shuffled.to_csv(args.output, index=False, encoding="utf-8")
-    print(f"All translations completed successfully! Shuffled and saved to '{args.output}'.")
+    # Check if there are any untranslated target subset records remaining across all domains
+    domain_mask = df["Domain"].str.lower().isin([d.lower() for d in domains_to_process])
+    untranslated_mask = (df["Ekegusii"].isna() | (df["Ekegusii"] == ""))
+    all_domain_untranslated = df[domain_mask & untranslated_mask].index.tolist()
+    remaining_in_subset = [idx for idx in all_domain_untranslated if idx in target_subset_indices]
+
+    if len(remaining_in_subset) == 0:
+        print("\nAll target records translated! Shuffling the final dataset...")
+        df_shuffled = df.sample(frac=1, random_state=42).reset_index(drop=True)
+        df_shuffled.to_csv(args.output, index=False, encoding="utf-8")
+        print(f"All translations completed successfully! Shuffled and saved to '{args.output}'.")
+    else:
+        df.to_csv(args.output, index=False, encoding="utf-8")
+        total_target_records = len(target_subset_indices)
+        translated_target_records = total_target_records - len(remaining_in_subset)
+        print(f"\nPhase completed successfully! Progress: {translated_target_records} / {total_target_records} target records translated. Saved to '{args.output}'. Resumable next run.")
 
 if __name__ == "__main__":
     main()
