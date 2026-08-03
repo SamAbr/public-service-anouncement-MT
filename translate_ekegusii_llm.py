@@ -121,6 +121,55 @@ def get_domain_prompt(domain_name):
     # Fallback to health if unknown
     return DOMAIN_PROMPTS["health"]
 
+def get_batch_prompt(domain_name):
+    base_prompt = get_domain_prompt(domain_name)
+    batch_instruction = """Translate the list of English sentences provided by the user into Ekegusii.
+Output your translations as a raw JSON array of strings in the exact same order: ["Translation 1", "Translation 2", ...]. 
+Output ONLY the JSON array, no explanation, no quotes, no markdown formatting (do not wrap in ```json)."""
+    
+    lines = base_prompt.split("\n")
+    filtered_lines = [l for l in lines if "Translate the following English sentence" not in l and "Output ONLY the translation" not in l]
+    return "\n".join(filtered_lines) + "\n\n" + batch_instruction
+
+def translate_batch(client, model, english_texts, system_prompt):
+    max_retries = 3
+    backoff_factor = 2
+    user_content = json.dumps(english_texts, indent=2)
+    
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Translate these sentences:\n{user_content}"}
+                ],
+                max_completion_tokens=2000
+            )
+            content = response.choices[0].message.content.strip()
+            
+            # Clean markdown formatting if present
+            if content.startswith("```"):
+                lines = content.split("\n")
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines[-1].strip() == "```":
+                    lines = lines[:-1]
+                content = "\n".join(lines).strip()
+                
+            translations = json.loads(content)
+            if isinstance(translations, list) and len(translations) == len(english_texts):
+                return [str(t).strip() for t in translations]
+        except Exception as e:
+            err_msg = str(e)
+            if "rate_limit" in err_msg or "429" in err_msg or "too_many_requests" in err_msg:
+                sleep_time = (backoff_factor ** attempt) + random.uniform(0.5, 1.5)
+                time.sleep(sleep_time)
+                continue
+            # For content safety or JSON parsing errors, break early to trigger individual fallback
+            break
+    return None
+
 def translate_single_sentence(client, model, english_text, system_prompt):
     max_retries = 5
     backoff_factor = 2
@@ -281,25 +330,47 @@ def main():
             
         print(f"\n=== Translating Domain: '{domain}' ({total_for_domain} records in this phase) ===")
         
+        batch_size = 10
+        batches = [target_indices[i : i + batch_size] for i in range(0, len(target_indices), batch_size)]
+        
+        batch_prompt = get_batch_prompt(domain)
+        single_prompt = get_domain_prompt(domain)
+        
         completed_count = 0
+        
+        def process_batch(idx_list):
+            texts = [df.at[idx, "English"] for idx in idx_list]
+            # Try batch translation first
+            results = translate_batch(client, model_name, texts, batch_prompt)
+            if results is not None:
+                return list(zip(idx_list, results))
+                
+            # Fallback: translate individually
+            fallback_results = []
+            for idx in idx_list:
+                res = translate_single_sentence(client, model_name, df.at[idx, "English"], single_prompt)
+                fallback_results.append((idx, res))
+            return fallback_results
+            
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            future_to_idx = {
-                executor.submit(translate_single_sentence, client, model_name, df.at[idx, "English"], prompt): idx
-                for idx in target_indices
+            future_to_batch = {
+                executor.submit(process_batch, batch): batch
+                for batch in batches
             }
             
-            for future in tqdm(as_completed(future_to_idx), total=total_for_domain, desc=f"Translating {domain}"):
-                idx = future_to_idx[future]
+            for future in tqdm(as_completed(future_to_batch), total=len(batches), desc=f"Translating {domain}"):
                 try:
-                    translation = future.result()
-                    if translation:
-                        df.at[idx, "Ekegusii"] = translation
-                        translated_this_run += 1
+                    batch_results = future.result()
+                    if batch_results:
+                        for idx, translation in batch_results:
+                            if translation:
+                                df.at[idx, "Ekegusii"] = translation
+                                translated_this_run += 1
                 except Exception as e:
-                    print(f"Worker exception for row {idx} in domain {domain}: {e}")
+                    print(f"Worker exception for batch: {e}")
                     
                 completed_count += 1
-                if completed_count % args.batch_save == 0:
+                if completed_count % (args.batch_save // batch_size + 1) == 0:
                     df.to_csv(args.output, index=False, encoding="utf-8")
         
         # Save after completing each domain
