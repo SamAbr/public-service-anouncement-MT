@@ -229,7 +229,7 @@ def translate_single_sentence(client, model, english_text, system_prompt):
 
 def main():
     parser = argparse.ArgumentParser(description="Domain-Specific Static Few-Shot Ekegusii LLM Translation")
-    parser.add_argument("--input", type=str, default="output/english_psas.csv", help="Input English CSV file")
+    parser.add_argument("--input", type=str, default="output/psa_parallel_dataset.csv", help="Input English CSV file")
     parser.add_argument("--output", type=str, default="output/psa_parallel_dataset.csv", help="Output parallel CSV file")
     parser.add_argument("--api-key", type=str, default=None, help="OpenAI / Azure API Key")
     parser.add_argument("--endpoint", type=str, default=None, help="API Endpoint URL (if using custom/Azure endpoint)")
@@ -282,8 +282,15 @@ def main():
     else:
         df = df_input.copy()
 
-    if "Ekegusii" not in df.columns:
-        df["Ekegusii"] = ""
+    # Dynamic support for both spellings, defaulting to "Ekegussi"
+    col_name = "Ekegussi"
+    if "Ekegussi" in df.columns:
+        col_name = "Ekegussi"
+    elif "Ekegusii" in df.columns:
+        col_name = "Ekegusii"
+        
+    if col_name not in df.columns:
+        df[col_name] = ""
 
     # Identify target indices to translate: first 15k and last 15k records
     num_records = len(df)
@@ -314,7 +321,7 @@ def main():
         
         # Get untranslated records matching this domain
         domain_mask = (df["Domain"].str.lower() == domain.lower())
-        untranslated_mask = (df["Ekegusii"].isna() | (df["Ekegusii"] == ""))
+        untranslated_mask = (df[col_name].isna() | (df[col_name] == ""))
         
         all_domain_untranslated = df[domain_mask & untranslated_mask].index.tolist()
         # Restrict to first 15k and last 15k subset
@@ -365,7 +372,7 @@ def main():
                     if batch_results:
                         for idx, translation in batch_results:
                             if translation:
-                                df.at[idx, "Ekegusii"] = translation
+                                df.at[idx, col_name] = translation
                                 translated_this_run += 1
                 except Exception as e:
                     print(f"Worker exception for batch: {e}")
@@ -380,7 +387,7 @@ def main():
 
     # Check if there are any untranslated target subset records remaining across all domains
     domain_mask = df["Domain"].str.lower().isin([d.lower() for d in domains_to_process])
-    untranslated_mask = (df["Ekegusii"].isna() | (df["Ekegusii"] == ""))
+    untranslated_mask = (df[col_name].isna() | (df[col_name] == ""))
     all_domain_untranslated = df[domain_mask & untranslated_mask].index.tolist()
     remaining_in_subset = [idx for idx in all_domain_untranslated if idx in target_subset_indices]
 
