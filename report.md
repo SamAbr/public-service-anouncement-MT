@@ -73,12 +73,20 @@ Because Ekegusii lacks large general parallel datasets, we hand-curated a seed c
 1. **The Ekegusii Revised Bible (*EBIBILIA ENCHENU*)**: Provides formal, command-based grammatical structures (e.g. Genesis 1:1, Matthew 6:33, Psalms 23:1, John 3:16).
 2. **The "Four Spiritual Laws" Tract (`4laws.com/laws/ekegusii`)**: Hand-aligned contemporary prose translated by native speakers.
 
-### Dynamic Few-Shot Retrieval Architecture
-Instead of using a static, domain-agnostic few-shot prompt (which fails to teach domain-specific terms to LLMs), we built a Jaccard word-similarity search system:
-1. For each input PSA, the system computes the token overlap similarity between the input English sentence and all English sentences in our seed corpus.
-2. It retrieves the **top 3 most semantically similar** English-Ekegusii sentence pairs.
-3. It constructs a customized, domain-relevant few-shot context block (injecting these 3 pairs) into the LLM system prompt.
-4. The prompt is dispatched to the LLM (e.g., GPT-5.1 mini / GPT-4o mini) to produce high-fidelity translations aligned with the requested style.
+### Domain-Specific Static Few-Shot Prompting
+Instead of dynamically retrieving examples per sentence (which is time and token consuming), we pre-configured a static system prompt for each of the core domains (Health, Agriculture/Environment, Security & Safety, Education, Governance) containing domain-relevant verified few-shot translations.
+
+The translation script:
+1. Iterates domain-by-domain.
+2. Selectes the pre-configured prompt for the active domain.
+3. Translates target records in parallel using ThreadPoolExecutor.
+
+### Target Subset
+For resource and cost optimization, only a subset of the English dataset is translated to Ekegusii:
+* **First 15,000 records** (indices 0 to 14,999)
+* **Last 15,000 records** (indices `len(df) - 15000` to `len(df) - 1`)
+Any record outside this target range is left blank (`""`) for the Ekegusii column.
+
 
 ### Pipeline Separation
 To prevent environment conflicts and provide a clean, user-friendly execution flow, the Colab notebooks are separated:
