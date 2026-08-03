@@ -28,9 +28,9 @@ To prevent the LLM from inventing metadata (which leads to unbalanced datasets),
 * **Metadata Permutation**: Randomly selects combinations of `Domain`, `Topic`, `Subtopic`, `Target Institution`, `Audience`, `Hazard`, and `Location` based on pre-defined Kenyan contexts.
 * **Corpus Balancing**: Tracks the frequency of selected attributes across batches and dynamically chooses attributes with the lowest generation frequency to guarantee a perfectly uniform distribution across all categories.
 
-### Step 2: Constrained LLM Synthesis (Azure OpenAI GPT-4o)
+### Step 2: Constrained LLM Synthesis (Azure OpenAI GPT-5.1 mini)
 The planned facts were sent to Azure OpenAI in parallel batches of 20 using `ThreadPoolExecutor` (10 worker threads) for maximum speed:
-* **Style Anchoring**: GPT-4o was few-shot prompted with authentic Kenyan PSAs from real-world reference datasets (`PSA_KE_Final.csv`) to emulate their action-oriented, direct style.
+* **Style Anchoring**: GPT-5.1 mini was few-shot prompted with authentic Kenyan PSAs from real-world reference datasets (`PSA_KE_Final.csv`) to emulate their action-oriented, direct style.
 * **Strict Negative Constraints**:
   * **No Conditional Starts**: Prohibits starting sentences with `"If"`, `"If you"`, `"If eligible"`, or `"If facing"`.
   * **No Passive Subjects**: Prohibits passive structures (e.g., rejecting *"registering is advised"* or *"to submit is required"*).
@@ -51,7 +51,6 @@ Once the English seed set was completed, it was sequentially translated into thr
 * **Somali**: Translated using `facebook/nllb-200-1.3B`.
 * **Luo**: Translated using `facebook/nllb-200-1.3B`.
 * **Acronym Protection**: Special tokens were registered in the tokenizer to protect Kenyan acronyms (e.g., `SHA`, `HELB`, `NTSA`, `KRA`, `Huduma`) from being corrupted or mistranslated.
-* **GPU Speed Optimization**: Removed sequential back-translation checks during generation to run batch translation in parallel, speeding up execution by **100x**.
 * **NumPy 2.0 Resilience**: Wrapped Language Identification calls in try-except blocks to gracefully bypass fasttext copy limitations in newer Google Colab environments.
 
 ---
@@ -61,7 +60,7 @@ Once the English seed set was completed, it was sequentially translated into thr
 * **Total Size**: 50,000+ aligned 4-way parallel records.
 * **Format**: 17-column CSV:
   * `PSA_Id`, `Domain`, `Topic`, `Subtopic`, `Class`, `English`, `Kiswahili`, `Somali`, `Luo`, `is_synthetic`, `model_version`, `scenario_id`, `intent`, `severity`, `syntactic_pattern`, `lexical_profile`, `word_count`.
-* **Style**: Conversational, action-oriented, direct command sentences tailored specifically to Kenyan public service messaging.
+* **Style**: Conversational, action-oriented, direct command sentences tailored specifically to Kenyan public service announcements.
 
 ---
 

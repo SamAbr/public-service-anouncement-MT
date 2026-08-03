@@ -51,6 +51,7 @@ def main():
     parser.add_argument("--model", type=str, default="gpt-4o-mini", help="Model name to use (e.g. gpt-4o-mini)")
     parser.add_argument("--workers", type=int, default=10, help="Number of concurrent translation workers")
     parser.add_argument("--batch-save", type=int, default=100, help="Save to CSV every N translated records")
+    parser.add_argument("--domain", type=str, default=None, help="Filter translation to a specific domain (e.g., Health, Agriculture, Security, Education, Governance)")
     args = parser.parse_args()
 
     api_key = args.api_key or os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY")
@@ -84,8 +85,16 @@ def main():
     if "Ekegusii" not in df.columns:
         df["Ekegusii"] = ""
 
-    # Identify untranslated indices
-    untranslated_indices = df[df["Ekegusii"].isna() | (df["Ekegusii"] == "")].index.tolist()
+    # Identify untranslated indices with optional domain filtering
+    if args.domain:
+        print(f"Filtering translation to domain: '{args.domain}'")
+        untranslated_indices = df[
+            (df["Ekegusii"].isna() | (df["Ekegusii"] == "")) & 
+            (df["Domain"].str.lower() == args.domain.lower())
+        ].index.tolist()
+    else:
+        untranslated_indices = df[df["Ekegusii"].isna() | (df["Ekegusii"] == "")].index.tolist()
+        
     total_to_translate = len(untranslated_indices)
     
     if total_to_translate == 0:
