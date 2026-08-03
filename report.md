@@ -80,3 +80,9 @@ Instead of using a static, domain-agnostic few-shot prompt (which fails to teach
 3. It constructs a customized, domain-relevant few-shot context block (injecting these 3 pairs) into the LLM system prompt.
 4. The prompt is dispatched to the LLM (e.g., GPT-5.1 mini / GPT-4o mini) to produce high-fidelity translations aligned with the requested style.
 
+### Pipeline Separation
+To prevent environment conflicts and provide a clean, user-friendly execution flow, the Colab notebooks are separated:
+* **[pipeline.ipynb](file:///C:/Users/Admin/.gemini/antigravity-ide/scratch/psa_generator/pipeline.ipynb)**: Dedicated to GPU-accelerated sequential NMT translation for Swahili, Somali, and Luo.
+* **[pipeline_ekegusii.ipynb](file:///C:/Users/Admin/.gemini/antigravity-ide/scratch/psa_generator/pipeline_ekegusii.ipynb)**: Dedicated to OpenAI/Azure LLM-driven Retrieval-Augmented Ekegusii translation.
+
+
