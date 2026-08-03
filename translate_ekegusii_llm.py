@@ -270,23 +270,14 @@ def main():
         else:
             client = OpenAI(api_key=api_key)
 
-    if not os.path.exists(args.input):
-        print(f"Error: Input file '{args.input}' not found.")
+    # Read/Initialize parallel dataset from output (or input if output does not exist yet)
+    target_file = args.output if os.path.exists(args.output) else args.input
+    if not os.path.exists(target_file):
+        print(f"Error: Target dataset file '{target_file}' not found.")
         return
-
-    # Read/Initialize parallel dataset
-    df_input = pd.read_csv(args.input)
-    
-    if os.path.exists(args.output):
-        df = pd.read_csv(args.output)
-        if "English" not in df.columns or len(df) != len(df_input) or set(df["English"]) != set(df_input["English"]):
-            print("Existing output parallel dataset does not match input English file. Initializing a fresh copy.")
-            df = df_input.copy()
-        else:
-            # Re-align existing df to df_input order temporarily during execution
-            df = df.set_index("English").reindex(df_input["English"]).reset_index()
-    else:
-        df = df_input.copy()
+        
+    print(f"Loading parallel dataset from '{target_file}'...")
+    df = pd.read_csv(target_file, low_memory=False)
 
     # Rename "Ekegussi" to "Ekegusii" if present from previous runs
     if "Ekegussi" in df.columns:
