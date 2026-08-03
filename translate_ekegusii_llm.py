@@ -270,14 +270,33 @@ def main():
         else:
             client = OpenAI(api_key=api_key)
 
-    # Read/Initialize parallel dataset from output (or input if output does not exist yet)
-    target_file = args.output if os.path.exists(args.output) else args.input
-    if not os.path.exists(target_file):
-        print(f"Error: Target dataset file '{target_file}' not found.")
+    # Priority list for loading dataset:
+    # 1. Output file on Drive (args.output)
+    # 2. Local workspace parallel dataset (output/psa_parallel_dataset.csv)
+    # 3. Input file argument (args.input)
+    target_file = None
+    for candidate in [args.output, "output/psa_parallel_dataset.csv", args.input]:
+        if candidate and os.path.exists(candidate):
+            target_file = candidate
+            break
+            
+    if not target_file:
+        print(f"Error: Target dataset file not found.")
         return
         
     print(f"Loading parallel dataset from '{target_file}'...")
     df = pd.read_csv(target_file, low_memory=False)
+
+    # Restore missing language columns (Kiswahili, Somali, Luo) from local workspace if missing in loaded file
+    if os.path.exists("output/psa_parallel_dataset.csv") and target_file != "output/psa_parallel_dataset.csv":
+        try:
+            df_workspace = pd.read_csv("output/psa_parallel_dataset.csv", low_memory=False)
+            for lang_col in ["Kiswahili", "Somali", "Luo"]:
+                if lang_col in df_workspace.columns and (lang_col not in df.columns or df[lang_col].isna().all()):
+                    print(f"Merging missing language column '{lang_col}' from workspace parallel dataset...")
+                    df[lang_col] = df_workspace[lang_col]
+        except Exception as e:
+            print(f"Warning: Could not merge language columns from workspace: {e}")
 
     # Rename "Ekegussi" to "Ekegusii" if present from previous runs
     if "Ekegussi" in df.columns:
