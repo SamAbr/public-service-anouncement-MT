@@ -167,9 +167,12 @@ def main():
     
     if os.path.exists(args.output):
         df = pd.read_csv(args.output)
-        if "English" not in df.columns or len(df) != len(df_input) or not df["English"].equals(df_input["English"]):
+        if "English" not in df.columns or len(df) != len(df_input) or set(df["English"]) != set(df_input["English"]):
             print("Existing output parallel dataset does not match input English file. Initializing a fresh copy.")
             df = df_input.copy()
+        else:
+            # Re-align existing df to df_input order temporarily during execution
+            df = df.set_index("English").reindex(df_input["English"]).reset_index()
     else:
         df = df_input.copy()
 
@@ -235,9 +238,11 @@ def main():
         df.to_csv(args.output, index=False, encoding="utf-8")
         print(f"Completed translation for domain '{domain}'.")
 
-    # Final save
-    df.to_csv(args.output, index=False, encoding="utf-8")
-    print(f"\nAll translations completed successfully! Saved to '{args.output}'.")
+    # Final save with shuffling (preserving alignment of translations)
+    print("\nShuffling the final dataset...")
+    df_shuffled = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    df_shuffled.to_csv(args.output, index=False, encoding="utf-8")
+    print(f"All translations completed successfully! Shuffled and saved to '{args.output}'.")
 
 if __name__ == "__main__":
     main()
