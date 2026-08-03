@@ -238,6 +238,7 @@ def main():
     parser.add_argument("--batch-save", type=int, default=100, help="Save to CSV every N translated records")
     parser.add_argument("--domain", type=str, default=None, help="Filter translation to a specific domain (e.g., Health, Agriculture, Security, Education, Governance)")
     parser.add_argument("--limit", type=int, default=None, help="Maximum number of records to translate in this run (for phased execution)")
+    parser.add_argument("--batch-size", type=int, default=10, help="Number of sentences to translate in a single LLM API call")
     args = parser.parse_args()
 
     api_key = args.api_key or os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY")
@@ -330,7 +331,7 @@ def main():
             
         print(f"\n=== Translating Domain: '{domain}' ({total_for_domain} records in this phase) ===")
         
-        batch_size = 10
+        batch_size = args.batch_size
         batches = [target_indices[i : i + batch_size] for i in range(0, len(target_indices), batch_size)]
         
         batch_prompt = get_batch_prompt(domain)
