@@ -1,4 +1,5 @@
 import argparse
+import random
 import os
 import time
 import pandas as pd
@@ -121,19 +122,10 @@ def get_domain_prompt(domain_name):
     return DOMAIN_PROMPTS["health"]
 
 def translate_single_sentence(client, model, english_text, system_prompt):
-    # Try calling with max_completion_tokens (recommended for reasoning models like gpt-5-mini)
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Translate this: {english_text}"}
-            ],
-            max_completion_tokens=100
-        )
-        return response.choices[0].message.content.strip().strip('"')
-    except Exception as e:
-        # Fallback to standard parameters (max_tokens and temperature for legacy models)
+    max_retries = 5
+    backoff_factor = 2
+    
+    for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
                 model=model,
@@ -141,13 +133,50 @@ def translate_single_sentence(client, model, english_text, system_prompt):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Translate this: {english_text}"}
                 ],
-                temperature=0.1,
-                max_tokens=100
+                max_completion_tokens=100
             )
             return response.choices[0].message.content.strip().strip('"')
-        except Exception as fallback_err:
-            print(f"Error translating sentence '{english_text}': {e} | Fallback: {fallback_err}")
-            return None
+        except Exception as e:
+            err_msg = str(e)
+            
+            # Handle Azure Content Filter violation
+            if "content_filter" in err_msg or "ResponsibleAIPolicyViolation" in err_msg:
+                print(f"\nRow skipped due to Azure Content Filter violation: '{english_text}'")
+                return "[Content Filtered]"
+                
+            # Handle Rate Limits (429) or Server Errors (5xx)
+            if "rate_limit" in err_msg or "429" in err_msg or "too_many_requests" in err_msg or "500" in err_msg or "503" in err_msg:
+                sleep_time = (backoff_factor ** attempt) + random.uniform(0.5, 1.5)
+                print(f"\nRate limit hit (429). Retrying in {sleep_time:.2f} seconds (Attempt {attempt+1}/{max_retries}) for: '{english_text[:50]}...'")
+                time.sleep(sleep_time)
+                continue
+                
+            # For other exceptions or on last attempt, try the legacy parameter fallback
+            if attempt == max_retries - 1:
+                try:
+                    response = client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": f"Translate this: {english_text}"}
+                        ],
+                        temperature=0.1,
+                        max_tokens=100
+                    )
+                    return response.choices[0].message.content.strip().strip('"')
+                except Exception as fallback_err:
+                    fallback_err_msg = str(fallback_err)
+                    if "content_filter" in fallback_err_msg or "ResponsibleAIPolicyViolation" in fallback_err_msg:
+                        print(f"\nRow skipped due to Azure Content Filter violation in fallback: '{english_text}'")
+                        return "[Content Filtered]"
+                    print(f"\nError translating sentence '{english_text}': {e} | Fallback Error: {fallback_err}")
+                    return None
+            
+            # Wait before retry
+            sleep_time = (backoff_factor ** attempt) + random.uniform(0.5, 1.5)
+            time.sleep(sleep_time)
+            
+    return None
 
 def main():
     parser = argparse.ArgumentParser(description="Domain-Specific Static Few-Shot Ekegusii LLM Translation")
@@ -156,7 +185,7 @@ def main():
     parser.add_argument("--api-key", type=str, default=None, help="OpenAI / Azure API Key")
     parser.add_argument("--endpoint", type=str, default=None, help="API Endpoint URL (if using custom/Azure endpoint)")
     parser.add_argument("--model", type=str, default="gpt-5-mini", help="Model name to use (e.g. gpt-5-mini)")
-    parser.add_argument("--workers", type=int, default=10, help="Number of concurrent translation workers")
+    parser.add_argument("--workers", type=int, default=5, help="Number of concurrent translation workers")
     parser.add_argument("--batch-save", type=int, default=100, help="Save to CSV every N translated records")
     parser.add_argument("--domain", type=str, default=None, help="Filter translation to a specific domain (e.g., Health, Agriculture, Security, Education, Governance)")
     parser.add_argument("--limit", type=int, default=None, help="Maximum number of records to translate in this run (for phased execution)")
