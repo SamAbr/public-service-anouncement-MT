@@ -13,6 +13,7 @@ DOMAIN_PROMPTS = {
     "health": """You are an expert English-to-Ekegusii (Kisii) translator. 
 Translate the input English public service announcement (PSA) into natural Ekegusii.
 Keep the translation action-oriented, clear, and command-focused. 
+Do NOT translate or alter official Kenyan institution names, acronyms, or administrative programs (e.g. NDMA, HELB, NTSA, KUCCPS, Huduma, KNEC, KRA, SHA, NSSF, NHIF, NC4, etc.). Keep them exactly as written in English in your translation.
 
 Here are verified reference translations for the Health domain:
 
@@ -37,6 +38,7 @@ Translate the following English sentence. Output ONLY the translation and nothin
     "agriculture": """You are an expert English-to-Ekegusii (Kisii) translator. 
 Translate the input English public service announcement (PSA) into natural Ekegusii.
 Keep the translation action-oriented, clear, and command-focused. 
+Do NOT translate or alter official Kenyan institution names, acronyms, or administrative programs (e.g. NDMA, HELB, NTSA, KUCCPS, Huduma, KNEC, KRA, SHA, NSSF, NHIF, NC4, etc.). Keep them exactly as written in English in your translation.
 
 Here are verified reference translations for the Agriculture and Environment domain:
 
@@ -61,6 +63,7 @@ Translate the following English sentence. Output ONLY the translation and nothin
     "security & safety": """You are an expert English-to-Ekegusii (Kisii) translator. 
 Translate the input English public service announcement (PSA) into natural Ekegusii.
 Keep the translation action-oriented, clear, and command-focused. 
+Do NOT translate or alter official Kenyan institution names, acronyms, or administrative programs (e.g. NDMA, HELB, NTSA, KUCCPS, Huduma, KNEC, KRA, SHA, NSSF, NHIF, NC4, etc.). Keep them exactly as written in English in your translation.
 
 Here are verified reference translations for the Security and Safety domain:
 
@@ -81,6 +84,7 @@ Translate the following English sentence. Output ONLY the translation and nothin
     "education": """You are an expert English-to-Ekegusii (Kisii) translator. 
 Translate the input English public service announcement (PSA) into natural Ekegusii.
 Keep the translation action-oriented, clear, and command-focused. 
+Do NOT translate or alter official Kenyan institution names, acronyms, or administrative programs (e.g. NDMA, HELB, NTSA, KUCCPS, Huduma, KNEC, KRA, SHA, NSSF, NHIF, NC4, etc.). Keep them exactly as written in English in your translation.
 
 Here are verified reference translations for the Education domain:
 
@@ -93,6 +97,7 @@ Translate the following English sentence. Output ONLY the translation and nothin
     "governance": """You are an expert English-to-Ekegusii (Kisii) translator. 
 Translate the input English public service announcement (PSA) into natural Ekegusii.
 Keep the translation action-oriented, clear, and command-focused. 
+Do NOT translate or alter official Kenyan institution names, acronyms, or administrative programs (e.g. NDMA, HELB, NTSA, KUCCPS, Huduma, KNEC, KRA, SHA, NSSF, NHIF, NC4, etc.). Keep them exactly as written in English in your translation.
 
 Here are verified reference translations for the Governance domain:
 
