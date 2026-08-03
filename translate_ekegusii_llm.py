@@ -121,6 +121,7 @@ def get_domain_prompt(domain_name):
     return DOMAIN_PROMPTS["health"]
 
 def translate_single_sentence(client, model, english_text, system_prompt):
+    # Try calling with max_completion_tokens (recommended for reasoning models like gpt-5-mini)
     try:
         response = client.chat.completions.create(
             model=model,
@@ -128,13 +129,25 @@ def translate_single_sentence(client, model, english_text, system_prompt):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Translate this: {english_text}"}
             ],
-            temperature=0.1,
-            max_tokens=100
+            max_completion_tokens=100
         )
         return response.choices[0].message.content.strip().strip('"')
     except Exception as e:
-        print(f"Error translating sentence '{english_text}': {e}")
-        return None
+        # Fallback to standard parameters (max_tokens and temperature for legacy models)
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Translate this: {english_text}"}
+                ],
+                temperature=0.1,
+                max_tokens=100
+            )
+            return response.choices[0].message.content.strip().strip('"')
+        except Exception as fallback_err:
+            print(f"Error translating sentence '{english_text}': {e} | Fallback: {fallback_err}")
+            return None
 
 def main():
     parser = argparse.ArgumentParser(description="Domain-Specific Static Few-Shot Ekegusii LLM Translation")
