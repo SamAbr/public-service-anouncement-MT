@@ -154,10 +154,23 @@ def main():
         print("Error: API Key is required. Please provide it via --api-key or set the OPENAI_API_KEY environment variable.")
         return
 
-    if args.endpoint:
-        client = OpenAI(api_key=api_key, base_url=args.endpoint)
+    endpoint = args.endpoint or os.getenv("AZURE_OPENAI_ENDPOINT")
+    model_name = args.model
+    
+    # Auto-detect if using Azure OpenAI credentials
+    if api_key and (not api_key.startswith("sk-") or "azure" in (endpoint or "").lower()):
+        if not endpoint:
+            endpoint = "https://sagebremariam-4420-resource.services.ai.azure.com/openai/v1"
+        if model_name in ["gpt-5-mini", "gpt-4o-mini"]:
+            model_name = "psa-generator"
+            print(f"Auto-detected Azure OpenAI key. Mapping model '{args.model}' to deployment '{model_name}'.")
+        print(f"Using Azure OpenAI endpoint: {endpoint}")
+        client = OpenAI(api_key=api_key, base_url=endpoint)
     else:
-        client = OpenAI(api_key=api_key)
+        if endpoint:
+            client = OpenAI(api_key=api_key, base_url=endpoint)
+        else:
+            client = OpenAI(api_key=api_key)
 
     if not os.path.exists(args.input):
         print(f"Error: Input file '{args.input}' not found.")
@@ -229,7 +242,7 @@ def main():
         completed_count = 0
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
             future_to_idx = {
-                executor.submit(translate_single_sentence, client, args.model, df.at[idx, "English"], prompt): idx
+                executor.submit(translate_single_sentence, client, model_name, df.at[idx, "English"], prompt): idx
                 for idx in target_indices
             }
             
