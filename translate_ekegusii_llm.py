@@ -297,6 +297,7 @@ def main():
         
     if col_name not in df.columns:
         df[col_name] = ""
+    df[col_name] = df[col_name].fillna("").astype(str)
 
     # Identify target indices to translate: first 15k and last 15k records
     num_records = len(df)
