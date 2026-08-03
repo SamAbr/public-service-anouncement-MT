@@ -288,13 +288,11 @@ def main():
     else:
         df = df_input.copy()
 
-    # Dynamic support for both spellings, defaulting to "Ekegussi"
-    col_name = "Ekegussi"
+    # Rename "Ekegussi" to "Ekegusii" if present from previous runs
     if "Ekegussi" in df.columns:
-        col_name = "Ekegussi"
-    elif "Ekegusii" in df.columns:
-        col_name = "Ekegusii"
+        df = df.rename(columns={"Ekegussi": "Ekegusii"})
         
+    col_name = "Ekegusii"
     if col_name not in df.columns:
         df[col_name] = ""
     df[col_name] = df[col_name].fillna("").astype(str)
