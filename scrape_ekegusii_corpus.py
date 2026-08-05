@@ -411,14 +411,10 @@ def main():
 
     # Save with and without ref column
     combined.to_csv(OUTPUT_FILE, index=False, encoding="utf-8")
-    # Also save a clean 2-column version for direct use in training
-    combined[["english", "ekegusii"]].to_csv(
-        OUTPUT_FILE.replace(".csv", "_clean.csv"), index=False, encoding="utf-8"
-    )
 
     print(f"\nSaved {len(combined):,} pairs to:")
     print(f"  {OUTPUT_FILE}")
-    print(f"  {OUTPUT_FILE.replace('.csv', '_clean.csv')} (english+ekegusii only)")
+
     print("\nSample rows:")
     sample = combined[["english", "ekegusii", "source"]].sample(min(5, len(combined)))
     for _, row in sample.iterrows():
