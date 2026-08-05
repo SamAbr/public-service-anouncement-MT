@@ -29,7 +29,6 @@ We built an end-to-end pipeline that:
 2. **Translates** the corpus into Kiswahili and Somali using NLLB-200.
 3. **Fine-tunes** NLLB-200 and mBART-50 on the generated parallel corpus.
 4. **Evaluates** translation quality using BLEU and chrF metrics.
-5. **Extends** the dataset to **Ekegusii (Kisii)** — an ultra-low-resource Bantu language — via domain-specific few-shot LLM prompting.
 
 ---
 
@@ -40,10 +39,8 @@ All generated datasets are available in the `output/` directory and committed to
 | File | Description |
 |------|-------------|
 | `output/english_psas.csv` | 50,318 validated English PSAs |
-| `output/psa_parallel_dataset.csv` | Final parallel corpus (English · Kiswahili · Somali · Luo · Ekegusii\*) |
-| `output/general_english_ekegusii.csv` | General-domain English–Ekegusii pairs for NLLB pre-training |
-
-> \* Ekegusii column populated for the first 15,000 and last 15,000 records (30,000 total).
+| `output/psa_parallel_dataset.csv` | Final parallel corpus (English · Kiswahili · Somali · Luo) |
+| `output/scraped_english_ekegusii.csv` | Extracted English-Ekegusii verse pairs |
 
 ---
 
@@ -106,19 +103,11 @@ English PSAs
 - **Acronym Protection**: Custom tokenizer tokens registered for `SHA`, `HELB`, `NTSA`, `KRA`, `Huduma`.
 - **Google Drive Resumability**: Output CSV checkpointed to Drive — safely resumes after runtime disconnect.
 
-### Phase 3: Ekegusii Extension (GPT-5 mini, Azure OpenAI)
-
-Ekegusii (Kisii) has virtually no public parallel datasets, so we designed a **domain-specific few-shot LLM translation** pipeline:
-
-- 14 hand-verified seed pairs sourced from the *Ekegusii Revised Bible* and the *Four Spiritual Laws* tract.
-- Static per-domain system prompts (Health, Agriculture, Security, Education, Governance).
-- Phased, resumable translation runs with graceful error handling (rate limits, content filters).
-- **Target subset**: First 15,000 + last 15,000 records = **30,000 Ekegusii translations**.
-
-### Phase 4: Model Fine-Tuning
+### Phase 3: Model Fine-Tuning
 
 ```
 Parallel Corpus  →  Tokenization  →  Mini-batch Training
+
      →  Forward Pass  →  Loss Computation
      →  Backpropagation  →  Parameter Update
      →  Fine-Tuned Model
@@ -135,17 +124,21 @@ Models fine-tuned:
 ```
 psa_generator/
 │
-├── generate_english_only.py        # English PSA synthesis via Azure LLM
-├── translate_colab.py              # GPU-accelerated NLLB translation (Swahili, Somali, Luo)
-├── translate_ekegusii_llm.py       # LLM-based Ekegusii translation with phased resumability
-├── download_general_ekegusii_dataset.py  # Downloads general-domain EN–Ekegusii pairs
-├── verify_dataset.py               # Validates columns, format, and null values
-├── test_generator.py               # Automated unit test suite
-├── requirements.txt                # Python dependencies
+├── english/
+│   └── generate_english_only.py    # English PSA synthesis via Azure LLM
 │
+├── corpus_translation/
+│   └── translate_colab.py          # GPU-accelerated NLLB translation (Swahili, Somali, Luo)
+│
+├── ekegusii/
+│   └── scrape_ekegusii_corpus.py   # Scrapes Ekegusii parallel corpus from web sources
+│
+├── tests/
+│   ├── verify_dataset.py           # Validates columns, format, and null values
+│   └── test_generator.py           # Automated unit test suite
+│
+├── requirements.txt                # Python dependencies
 ├── pipeline.ipynb                  # Colab notebook: English generation + Swahili/Somali/Luo NMT
-├── pipeline_ekegusii.ipynb         # Colab notebook: Ekegusii LLM translation
-├── presentation_slides.html        # Interactive HTML presentation (open in browser)
 ├── report.md                       # Detailed methodology report
 │
 ├── src/
@@ -165,7 +158,7 @@ psa_generator/
 └── output/
     ├── english_psas.csv
     ├── psa_parallel_dataset.csv
-    └── general_english_ekegusii.csv
+    └── scraped_english_ekegusii.csv
 ```
 
 ---
@@ -177,7 +170,7 @@ psa_generator/
 - An **Azure AI Foundry API Key** (GPT-5 mini deployment).
 - A Google account (for Google Colab GPU).
 
-### Option A: Swahili / Somali / Luo Pipeline (GPU)
+### Setup: Swahili / Somali / Luo Pipeline (GPU)
 
 1. Open [Google Colab](https://colab.research.google.com/) and upload **`pipeline.ipynb`**.
 2. Set runtime to **T4 GPU** → *Runtime > Change runtime type*.
@@ -188,16 +181,6 @@ psa_generator/
    - **Step 3**: Mount Google Drive for resumable checkpoint storage.
    - **Step 4**: Translate to Kiswahili, Somali, and Luo via NLLB-200.
    - **Step 5**: Download or push the dataset to GitHub.
-
-### Option B: Ekegusii Pipeline (LLM, phased)
-
-1. Open [Google Colab](https://colab.research.google.com/) and upload **`pipeline_ekegusii.ipynb`**.
-2. In the translation cell, set:
-   ```python
-   EKEGUSII_API_KEY = "your-azure-key"
-   PHASE_LIMIT = 5000   # Records per run (avoids timeout disconnects)
-   ```
-3. Re-run the cell in multiple sessions — it automatically resumes from where it left off.
 
 ---
 
