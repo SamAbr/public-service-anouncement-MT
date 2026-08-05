@@ -1,22 +1,132 @@
-# Synthetic Parallel English-Swahili-Somali-Luo PSA Generator
+# Fine-Tuning Neural Machine Translation Models for Kenyan Public Service Announcements Using a Synthetic Parallel Corpus
 
-An optimized, high-throughput pipeline designed to generate a dataset of over 50,000 high-quality, 4-way parallel Public Service Announcement (PSA) records in English, Swahili, Somali, and Luo for Machine Translation (MT) training.
+> **United States International University–Africa** · Department of Computing · 2026
+
+---
+
+## 👥 Team
+
+| Name | Role |
+|------|------|
+| Weldesenbet Zeray | Team Member |
+| Samuel Abrha | Team Member |
+| Hetal Kumbharana | Team Member |
+| Halima Mohammed | Team Member |
+| Peter Kidiga | Team Member |
+| Mitchelle Moraa | Team Member |
+
+**Supervisor:** Professor Edward Ombui
+
+---
+
+## 📌 Overview
+
+This project addresses the challenge of domain-specific machine translation for **low-resource Kenyan languages**. General-purpose MT systems struggle with the specialised style of Public Service Announcements (PSAs) because they are trained on broad multilingual data rather than domain-specific content.
+
+We built an end-to-end pipeline that:
+
+1. **Synthesises** a large-scale English PSA corpus using a constrained LLM (GPT-5 mini via Azure OpenAI).
+2. **Translates** the corpus into Kiswahili and Somali using NLLB-200.
+3. **Fine-tunes** NLLB-200 and mBART-50 on the generated parallel corpus.
+4. **Evaluates** translation quality using BLEU and chrF metrics.
+5. **Extends** the dataset to **Ekegusii (Kisii)** — an ultra-low-resource Bantu language — via domain-specific few-shot LLM prompting.
 
 ---
 
 ## 📊 Datasets
 
-The generated datasets are directly available in the repository:
-*   [output/english_psas.csv](file:///C:/Users/Admin/.gemini/antigravity-ide/scratch/psa_generator/output/english_psas.csv): Contains the generated unique English announcements.
-*   [output/psa_parallel_dataset.csv](file:///C:/Users/Admin/.gemini/antigravity-ide/scratch/psa_generator/output/psa_parallel_dataset.csv): The final 4-way parallel Swahili-Somali-Luo-English dataset ready for MT training.
+All generated datasets are available in the `output/` directory and committed to the repository:
+
+| File | Description |
+|------|-------------|
+| `output/english_psas.csv` | 50,318 validated English PSAs |
+| `output/psa_parallel_dataset.csv` | Final parallel corpus (English · Kiswahili · Somali · Luo · Ekegusii\*) |
+| `output/general_english_ekegusii.csv` | General-domain English–Ekegusii pairs for NLLB pre-training |
+
+> \* Ekegusii column populated for the first 15,000 and last 15,000 records (30,000 total).
 
 ---
 
-## 🚀 How it Works
+## 🏆 Results
 
-The pipeline is split into two specialized stages to maximize quality and performance:
-1.  **Constrained LLM Generation**: English announcements are custom-written by Azure OpenAI GPT-4o. The prompt enforces strict negative constraints to match the active, punchy style of real-world Kenyan PSAs, while a Python **Balancing Controller** guarantees uniform data distribution across domains.
-2.  **GPU Cloud Translation**: The English seed set is translated into Swahili, Somali, and Luo sequentially on a Google Colab GPU using Meta's **NLLB-200** models (distilled-600M for Swahili, and 1.3B for Somali and Luo). Key Kenyan acronyms (SHA, HELB, NTSA) are protected, and the translation runs in parallel batches for 100x faster execution.
+### Fine-Tuned vs. Zero-Shot Translation Performance
+
+| Model | BLEU | chrF |
+|-------|------|------|
+| NLLB-200 Zero-shot | 30.83 | 60.42 |
+| **NLLB-200 Fine-tuned** ⭐ | **50.86** | **73.37** |
+| mBART-50 Zero-shot | 0.18 | 12.86 |
+| mBART-50 Fine-tuned | 9.14 | 28.22 |
+
+**Key Findings:**
+- 🏆 **NLLB-200 fine-tuned** achieved the best overall performance: BLEU 50.86 / chrF 73.37.
+- 📈 **+64.7% BLEU improvement** over the NLLB-200 zero-shot baseline after fine-tuning.
+- mBART-50 showed improvement but significantly underperformed NLLB-200 in the PSA domain.
+
+---
+
+## 🚀 Pipeline Architecture
+
+### Phase 1: English Corpus Generation
+
+```
+Scenario Knowledge Base
+         │
+         ▼
+   Metadata Planner  ──► Domain-balanced permutation (Health, Education, Agriculture, Governance, Safety)
+         │
+         ▼
+ GPT-5 mini (Azure OpenAI)  ──► Constrained few-shot synthesis (10 parallel workers)
+         │
+         ▼
+   Validation Pipeline
+   ├── Single sentence, 10–25 words
+   ├── One clear public action
+   ├── Public advisory style
+   ├── No Gazette / press-release language
+   └── Jaccard deduplication
+         │
+         ▼
+ 50,318 Validated English PSAs
+```
+
+### Phase 2: NMT Translation (NLLB-200, GPU)
+
+```
+English PSAs
+      │
+      ▼
+ NLLB-200 (Google Colab GPU)
+      │
+      ├──────► Kiswahili  (nllb-200-distilled-600M)
+      ├──────► Somali     (nllb-200-1.3B)
+      └──────► Luo        (nllb-200-1.3B)
+```
+
+- **Acronym Protection**: Custom tokenizer tokens registered for `SHA`, `HELB`, `NTSA`, `KRA`, `Huduma`.
+- **Google Drive Resumability**: Output CSV checkpointed to Drive — safely resumes after runtime disconnect.
+
+### Phase 3: Ekegusii Extension (GPT-5 mini, Azure OpenAI)
+
+Ekegusii (Kisii) has virtually no public parallel datasets, so we designed a **domain-specific few-shot LLM translation** pipeline:
+
+- 14 hand-verified seed pairs sourced from the *Ekegusii Revised Bible* and the *Four Spiritual Laws* tract.
+- Static per-domain system prompts (Health, Agriculture, Security, Education, Governance).
+- Phased, resumable translation runs with graceful error handling (rate limits, content filters).
+- **Target subset**: First 15,000 + last 15,000 records = **30,000 Ekegusii translations**.
+
+### Phase 4: Model Fine-Tuning
+
+```
+Parallel Corpus  →  Tokenization  →  Mini-batch Training
+     →  Forward Pass  →  Loss Computation
+     →  Backpropagation  →  Parameter Update
+     →  Fine-Tuned Model
+```
+
+Models fine-tuned:
+- `facebook/nllb-200-distilled-600M` → **NLLB-200 Fine-tuned**
+- `facebook/mbart-large-50-many-to-many-mmt` → **mBART-50 Fine-tuned**
 
 ---
 
@@ -25,64 +135,102 @@ The pipeline is split into two specialized stages to maximize quality and perfor
 ```
 psa_generator/
 │
-├── generate_english_only.py # Script to generate raw English CSV via Azure LLM
-├── translate_colab.py       # GPU-accelerated NLLB translation script (for Colab)
-├── verify_dataset.py        # Validates columns, format, and null values in final CSV
-├── test_generator.py        # Automated unit testing suite
-├── requirements.txt         # Project python dependencies
-├── pipeline.ipynb           # Complete Colab notebook pipeline runner
-├── report.md                # Detailed methodology and synthesis report
+├── generate_english_only.py        # English PSA synthesis via Azure LLM
+├── translate_colab.py              # GPU-accelerated NLLB translation (Swahili, Somali, Luo)
+├── translate_ekegusii_llm.py       # LLM-based Ekegusii translation with phased resumability
+├── download_general_ekegusii_dataset.py  # Downloads general-domain EN–Ekegusii pairs
+├── verify_dataset.py               # Validates columns, format, and null values
+├── test_generator.py               # Automated unit test suite
+├── requirements.txt                # Python dependencies
 │
-├── src/                     # Core codebase package
-│   ├── __init__.py          # Package initializer
-│   ├── config.py            # Configuration settings (dataset size, paths, thresholds)
-│   ├── generator.py         # Orchestrator for concurrent LLM generation
-│   ├── llm_generator.py     # Azure OpenAI client and validation rewrite loop
-│   ├── validator.py         # Enforces word lengths (10-25) and rejects passive/If clauses
-│   ├── deduplicator.py      # Prevents exact and near-duplicate text generation
-│   ├── exporter.py          # Randomly interleaves rows across domains to prevent blocking
-│   ├── translator.py        # NLLB local/cloud translation wrapper
-│   ├── utils.py             # Shared helpers (e.g., seeding for reproducibility)
-│   │
-│   ├── templates/           # Configuration templates for metadata balancing
-│   │   ├── __init__.py
-│   │   └── families.py      # Metadata template definitions
-│   │
-│   └── knowledge/           # Structured lists of entities, locations, and actions
-│       ├── __init__.py
-│       ├── scenarios.py     # Domain scenarios mapping
-│       └── entities.py      # Entity objects
+├── pipeline.ipynb                  # Colab notebook: English generation + Swahili/Somali/Luo NMT
+├── pipeline_ekegusii.ipynb         # Colab notebook: Ekegusii LLM translation
+├── presentation_slides.html        # Interactive HTML presentation (open in browser)
+├── report.md                       # Detailed methodology report
+│
+├── src/
+│   ├── config.py                   # Configuration settings
+│   ├── generator.py                # Concurrent LLM generation orchestrator
+│   ├── llm_generator.py            # Azure OpenAI client + validation rewrite loop
+│   ├── validator.py                # Word length + style constraint enforcement
+│   ├── deduplicator.py             # Jaccard-based near-duplicate filtering
+│   ├── exporter.py                 # Domain-interleaved row export
+│   ├── translator.py               # NLLB translation wrapper
+│   ├── templates/families.py       # Metadata template definitions
+│   └── knowledge/
+│       ├── scenarios.py            # Domain scenario mappings
+│       ├── entities.py             # Kenyan entity objects
+│       └── ekegusii_fewshot_corpus.py  # Hand-curated Ekegusii seed pairs
+│
+└── output/
+    ├── english_psas.csv
+    ├── psa_parallel_dataset.csv
+    └── general_english_ekegusii.csv
 ```
 
 ---
 
-## 📖 Complete Setup & Execution Guide
+## 📖 Setup & Execution Guide
 
-### Part 1: Prerequisites & Keys
-To generate the dataset, you will need:
-*   An **Azure AI Foundry API Key** for GPT-4o.
-*   The deployment endpoint and deployment name of your model.
+### Prerequisites
 
-### Part 2: Colab Notebook Execution (Recommended)
-We have provided a pre-configured [pipeline.ipynb](file:///C:/Users/Admin/.gemini/antigravity-ide/scratch/psa_generator/pipeline.ipynb) notebook in the repository root to automate the generation and translation:
+- An **Azure AI Foundry API Key** (GPT-5 mini deployment).
+- A Google account (for Google Colab GPU).
 
-1.  Open **[Google Colab](https://colab.research.google.com/)**.
-2.  Click **File** > **Upload Notebook** and upload the `pipeline.ipynb` file from your repository clone.
-3.  Go to **Runtime** > **Change runtime type**, select **T4 GPU** (free tier), and click **Save**.
-4.  Run the cells sequentially:
-    *   **Step 0**: Clones/Pulls the latest code.
-    *   **Step 1**: Installs dependencies.
-    *   **Step 2**: Prompts for your Azure API key and runs `generate_english_only.py` to synthesize the English PSAs.
-    *   **Step 3**: Sequentially translates Swahili, Somali, and Luo on the GPU using `translate_colab.py`.
-    *   **Step 5**: Saves, commits, and pushes the final dataset directly back to your GitHub repository.
+### Option A: Swahili / Somali / Luo Pipeline (GPU)
+
+1. Open [Google Colab](https://colab.research.google.com/) and upload **`pipeline.ipynb`**.
+2. Set runtime to **T4 GPU** → *Runtime > Change runtime type*.
+3. Run cells sequentially:
+   - **Step 0**: Clone/pull the repository.
+   - **Step 1**: Install dependencies.
+   - **Step 2**: Generate 50,318 English PSAs (paste your Azure API key).
+   - **Step 3**: Mount Google Drive for resumable checkpoint storage.
+   - **Step 4**: Translate to Kiswahili, Somali, and Luo via NLLB-200.
+   - **Step 5**: Download or push the dataset to GitHub.
+
+### Option B: Ekegusii Pipeline (LLM, phased)
+
+1. Open [Google Colab](https://colab.research.google.com/) and upload **`pipeline_ekegusii.ipynb`**.
+2. In the translation cell, set:
+   ```python
+   EKEGUSII_API_KEY = "your-azure-key"
+   PHASE_LIMIT = 5000   # Records per run (avoids timeout disconnects)
+   ```
+3. Re-run the cell in multiple sessions — it automatically resumes from where it left off.
 
 ---
 
-## 🧪 Verification & Tests
-
-To run the unit tests locally:
+## 🧪 Tests
 
 ```bash
 python -m unittest test_generator.py
 ```
-*(Runs core verification tests utilizing mocked LLM generators, completing successfully in ~0.2s).*
+
+---
+
+## 📚 Key Technologies
+
+| Technology | Role |
+|------------|------|
+| **GPT-5 mini (Azure OpenAI)** | English PSA synthesis & Ekegusii translation |
+| **NLLB-200** | Zero-shot & fine-tuned NMT (Swahili, Somali, Luo) |
+| **mBART-50** | Comparative fine-tuning baseline |
+| **BLEU** | N-gram precision evaluation metric |
+| **chrF** | Character-level F-score evaluation metric |
+| **Google Colab (T4 GPU)** | GPU-accelerated NMT translation |
+
+---
+
+## 🔭 Future Work
+
+- Expand the parallel corpus to additional Kenyan languages (Kikuyu, Kamba, Kalenjin).
+- Conduct human evaluation with native speakers.
+- Fine-tune larger multilingual models on the expanded corpus.
+- Deploy fine-tuned models as a web-based translation API for Kenyan county governments.
+
+---
+
+## 📄 License
+
+This project is for academic research purposes at **USIU–Africa**. Dataset and code are published to support future research in multilingual MT for under-resourced African languages.
