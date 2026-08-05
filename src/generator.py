@@ -4,7 +4,6 @@ import random
 from collections import defaultdict
 from .config import DOMAINS, MIN_WORDS, MAX_WORDS, CHECKPOINT_FILE
 from .validator import ValidationEngine
-from .translator import NLLBTranslator
 
 # Import scenarios and entities
 from .knowledge.scenarios import SCENARIOS, INSTITUTIONS, AUDIENCES, HAZARDS, LOCATIONS
@@ -12,12 +11,11 @@ from .knowledge.entities import Context
 from .templates.families import TEMPLATE_FAMILIES
 
 class PSAGenerator:
-    def __init__(self, size=50000, translator=None, checkpoint_file=None, engine="azure_llm",
+    def __init__(self, size=50000, checkpoint_file=None, engine="azure_llm",
                  azure_api_key=None, azure_endpoint=None, azure_deployment=None, start_counts=None):
         self.size = size
         self.target_per_domain = size // len(DOMAINS)
         self.validator = ValidationEngine(min_words=10, max_words=25)
-        self.translator = translator if translator else NLLBTranslator()
         self.checkpoint_file = checkpoint_file if checkpoint_file else CHECKPOINT_FILE
         self.engine = "azure_llm"
         self.start_counts = start_counts or {}
@@ -177,73 +175,3 @@ class PSAGenerator:
         print(f"Parallel LLM generation complete! Total generated: {len(english_records)}")
         return english_records
 
-    def generate_and_translate(self):
-        """
-        Coordinates the full pipeline:
-        1. Generate English PSAs.
-        2. Resume from checkpoint if it exists.
-        3. Translate Swahili, Somali, and Luo sequentially.
-        4. Save/checkpoint progress.
-        """
-        records = self.generate_english_psas()
-        total_to_translate = len(records)
-        print(f"Total English PSAs generated: {total_to_translate}")
-        
-        checkpoint_states = {"Kiswahili": 0, "Somali": 0, "Luo": 0}
-        
-        if os.path.exists(self.checkpoint_file):
-            try:
-                with open(self.checkpoint_file, 'r', encoding='utf-8') as f:
-                    checkpoint = json.load(f)
-                    records = checkpoint.get("records", records)
-                    checkpoint_states = checkpoint.get("checkpoint_states", checkpoint_states)
-                    print(f"Resuming translation. Current indices: {checkpoint_states}")
-            except Exception as e:
-                print(f"Could not read checkpoint file: {e}. Starting fresh.")
-                
-        targets = [
-            ("Kiswahili", "swh_Latn", "facebook/nllb-200-distilled-600M"),
-            ("Somali", "som_Latn", "facebook/nllb-200-1.3B"),
-            ("Luo", "luo_Latn", "facebook/nllb-200-1.3B")
-        ]
-        
-        for col_name, lang_code, model_name in targets:
-            start_idx = checkpoint_states.get(col_name, 0)
-            if start_idx >= total_to_translate:
-                print(f"Skipping {col_name}: Fully translated.")
-                continue
-                
-            print(f"\n=== Translating to {col_name} using model {model_name} (from index {start_idx}) ===")
-            
-            self.translator.load_model(model_name=model_name)
-            batch_size = self.translator.batch_size
-            
-            english_texts = [r["English"] for r in records]
-            
-            for i in range(start_idx, total_to_translate, batch_size):
-                end_idx = min(i + batch_size, total_to_translate)
-                batch_texts = english_texts[i:end_idx]
-                
-                batch_translations = self.translator.translate_batch(batch_texts, tgt_lang=lang_code)
-                
-                for idx, translation in enumerate(batch_translations):
-                    record_idx = i + idx
-                    records[record_idx][col_name] = translation
-                    
-                checkpoint_states[col_name] = end_idx
-                checkpoint_data = {
-                    "records": records,
-                    "checkpoint_states": checkpoint_states
-                }
-                
-                with open(self.checkpoint_file, 'w', encoding='utf-8') as f:
-                    json.dump(checkpoint_data, f, ensure_ascii=False, indent=2)
-                    
-                print(f"Translated {col_name} and checkpointed up to index {end_idx}/{total_to_translate}...")
-                
-            self.translator.unload_model()
-            
-        if os.path.exists(self.checkpoint_file):
-            os.remove(self.checkpoint_file)
-            
-        return records

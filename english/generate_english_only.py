@@ -39,7 +39,6 @@ def main():
     # Initialize generator with selected engine (forced to azure_llm) and credentials
     generator = PSAGenerator(
         size=args.size,
-        translator=None,
         engine="azure_llm",
         azure_api_key=azure_key,
         azure_endpoint=args.azure_endpoint,

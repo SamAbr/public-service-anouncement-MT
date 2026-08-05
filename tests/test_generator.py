@@ -31,7 +31,6 @@ class TestPSAGenerator(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.output_csv = os.path.join(self.temp_dir, "test_output.csv")
-        self.mock_translator = MockTranslator()
         import random
         random.seed(0)
 
@@ -110,7 +109,6 @@ class TestPSAGenerator(unittest.TestCase):
         test_checkpoint = os.path.join(self.temp_dir, "test_checkpoint.json")
         generator = PSAGenerator(
             size=25,
-            translator=self.mock_translator,
             checkpoint_file=test_checkpoint,
             azure_api_key="mock_key",
             azure_endpoint="mock_endpoint",
