@@ -40,7 +40,11 @@ All generated datasets are available in the `output/` directory and committed to
 |------|-------------|
 | `output/english_psas.csv` | 50,318 validated English PSAs |
 | `output/psa_parallel_dataset.csv` | Final parallel corpus (English · Kiswahili · Somali · Luo) |
-| `output/scraped_english_ekegusii.csv` | Extracted English-Ekegusii verse pairs |
+| `output/bible_en_guz_swh.csv` | 30,863 English · Ekegusii · Kiswahili aligned triples (Bible + merged Storybooks) |
+| `output/lughayangu_sentences.csv` | 316 contemporary English-Ekegusii sentence pairs scraped from lughayangu.com |
+| `output/lughayangu_lexicon.csv` | 574 Ekegusii-English lexicon glosses scraped from lughayangu.com |
+| `output/lughayangu_unpaired.csv` | 280 unpaired Ekegusii definitions (retained for manual review) |
+| `output/corpus_manifest.json` | Source translation IDs, counts, and filter statistics |
 
 ---
 
@@ -131,11 +135,14 @@ psa_generator/
 │   └── translate_colab.py          # GPU-accelerated NLLB translation (Swahili, Somali, Luo)
 │
 ├── ekegusii/
-│   └── scrape_ekegusii_corpus.py   # Scrapes Ekegusii parallel corpus from web sources
+│   ├── build_trilingual_corpus.py  # English·Ekegusii·Kiswahili verse aligner (eBible USFM)
+│   └── scrape_lughayangu.py        # Scrapes Ekegusii dictionary entries from lughayangu.com
 │
 ├── tests/
 │   ├── verify_dataset.py           # Validates columns, format, and null values
-│   └── test_generator.py           # Automated unit test suite
+│   ├── test_generator.py           # Automated unit test suite
+│   ├── test_aligner.py             # Offline tests for the trilingual aligner
+│   └── test_lughayangu.py          # Offline tests for the lughayangu scraper
 │
 ├── requirements.txt                # Python dependencies
 ├── pipeline.ipynb                  # Colab notebook: English generation + Swahili/Somali/Luo NMT
@@ -158,7 +165,11 @@ psa_generator/
 └── output/
     ├── english_psas.csv
     ├── psa_parallel_dataset.csv
-    └── scraped_english_ekegusii.csv
+    ├── bible_en_guz_swh.csv
+    ├── lughayangu_sentences.csv
+    ├── lughayangu_lexicon.csv
+    ├── lughayangu_unpaired.csv
+    └── corpus_manifest.json
 ```
 
 ---
