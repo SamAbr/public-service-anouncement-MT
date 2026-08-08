@@ -39,9 +39,8 @@ stay about the modelling.
 ## Running on the Kinesis GPU node
 
 ```bash
-git clone https://github.com/SamAbr/public-service-anouncement-MT.git
+git clone -b master https://github.com/SamAbr/public-service-anouncement-MT.git
 cd public-service-anouncement-MT
-jupyter lab --ip 0.0.0.0 --no-browser
 ```
 
 Then run **`00_setup.ipynb`** first. It installs dependencies, checks the GPU,
@@ -56,9 +55,11 @@ Start Jupyter from the repo root so `nb_common.find_project_root()` resolves.
 fetches it from `raw.githubusercontent.com`. So the notebooks run identically on
 a laptop with the repo cloned and on a bare GPU node with nothing staged.
 
-The branch matters: `nb_common.GITHUB_BRANCH` is `"main"`, which is this repo's
-default branch on GitHub, even though local clones sit on `master`. Push with
-`git push origin HEAD:main` (see `push_to_github.sh`) or the raw URLs will 404.
+The branch matters. `nb_common.GITHUB_BRANCH` is `"master"` — this repo has both
+`master` and `main`, they have diverged, and **`master` is the live one**
+(`main` is a stale flat layout from an old merge). Push with
+`git push origin HEAD:master` (see `push_to_github.sh`). If you ever move to
+`main`, change `GITHUB_BRANCH` to match or every data download will 404.
 
 Trained models land in `artifacts/` and are **not** pushed — far too large.
 Copy them off the node yourself.

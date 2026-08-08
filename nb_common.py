@@ -35,7 +35,7 @@ def find_project_root(start: Path | None = None) -> Path:
 
 GITHUB_USER = "SamAbr"
 GITHUB_REPO = "public-service-anouncement-MT"
-GITHUB_BRANCH = "main"        # the repo's default branch (local clones use master)
+GITHUB_BRANCH = "master"      # the live branch. "main" exists but is stale.
 RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/{GITHUB_BRANCH}"
 
 # filename -> path inside the repository
