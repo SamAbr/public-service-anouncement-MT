@@ -34,7 +34,13 @@ Both failures are fixed by not guessing:
 
 3. PAIRS ARE NEVER FABRICATED. Ekegusii examples are paired with English
    translations only when the page yields equal counts of each. Anything else
-   is written to the unpaired file for manual review rather than guessed at.
+   is discarded (pass --write-unpaired to keep it for diagnosis).
+
+Every output row carries a `psa_relevance` score: the fraction of the English
+side's content words that also occur in output/english_psas.csv. It is reported
+rather than filtered on, because the Ekegusii section of this site is small and
+discarding rows at scrape time cannot be undone without re-crawling. Use
+--psa-only THRESHOLD if you do want to filter.
 
 Crawling and parsing are separate passes. Pass 1 caches raw text blocks per
 URL; pass 2 works purely from that cache, so extraction can be re-tuned with
@@ -58,9 +64,14 @@ Usage
 
 Outputs (--output-dir, default "output/"):
     lughayangu_sentences.csv    english / ekegusii example-sentence pairs
-    lughayangu_lexicon.csv      ekegusii headword / english gloss
-    lughayangu_unpaired.csv     examples with no confident translation
     lughayangu_cache.json       raw crawl cache (enables --reparse)
+    lughayangu_lexicon.csv      only with --write-lexicon
+    lughayangu_unpaired.csv     only with --write-unpaired
+
+The headword lexicon is not written by default. Measured against the project's
+own data, 574 glosses cover 0.09% of the Ekegusii vocabulary attested in the
+Bible corpus, and consist of botanical terms that do not occur in the English
+PSA corpus. The example sentences are the reason to run this scraper.
 """
 
 from __future__ import annotations
@@ -77,7 +88,7 @@ import sys
 import time
 import urllib.robotparser
 import xml.etree.ElementTree as ET
-from collections import Counter, defaultdict
+from collections import Counter
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse
 
@@ -93,6 +104,15 @@ USER_AGENT = f"AcademicResearchBot/1.0 (USIU-Africa MT research; +{CONTACT})"
 HEADERS = {"User-Agent": USER_AGENT}
 
 DEFAULT_LID_CORPUS = os.path.join("output", "bible_en_guz_swh.csv")
+DEFAULT_PSA_CORPUS = os.path.join("output", "english_psas.csv")
+
+STOPWORDS = set(
+    "the a an and or but if of to in on at for your you we they it is are was "
+    "were be been being have has had do does did will would shall should can "
+    "could may might must not no this that these those with from by as all any "
+    "more most very so than then into out up down over under about after before "
+    "because their our its his her".split()
+)
 
 # Deliberately low: single-word glosses ("wheat", "salt", "tea") are common and
 # are the most reliable content on the site. Short junk is handled by the
@@ -332,7 +352,39 @@ def find_boilerplate(cache: Dict[str, Dict], min_pages: int) -> Set[str]:
     return {t for t, n in df.items() if n >= min_pages}
 
 
+def load_psa_vocab(path: str) -> Optional[Set[str]]:
+    """Content-word vocabulary of the project's own English PSA corpus."""
+    if not os.path.exists(path):
+        return None
+    csv.field_size_limit(10 ** 7)
+    vocab: Set[str] = set()
+    with open(path, encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):
+            for word in re.findall(r"[a-z']+", (row.get("English") or "").lower()):
+                if word not in STOPWORDS and len(word) > 2:
+                    vocab.add(word)
+    print(f"  loaded {len(vocab):,} PSA content words from {path}")
+    return vocab
+
+
+def psa_relevance(text: str, psa_vocab: Optional[Set[str]]) -> Optional[float]:
+    """
+    Fraction of the English side's content words that also occur in the PSA
+    corpus. Reported as a column rather than used as a filter by default: the
+    scraped vocabulary is small, and discarding rows at scrape time throws away
+    data that cannot be recovered without re-crawling.
+    """
+    if psa_vocab is None:
+        return None
+    words = [w for w in re.findall(r"[a-z']+", text.lower())
+             if w not in STOPWORDS and len(w) > 2]
+    if not words:
+        return 0.0
+    return round(sum(1 for w in words if w in psa_vocab) / len(words), 3)
+
+
 def extract(cache: Dict[str, Dict], lid: CharLID, boilerplate: Set[str],
+            psa_vocab: Optional[Set[str]] = None,
             audit: bool = False) -> Tuple[List[Dict], List[Dict], List[Dict]]:
     sentences, lexicon, unpaired = [], [], []
 
@@ -365,12 +417,14 @@ def extract(cache: Dict[str, Dict], lid: CharLID, boilerplate: Set[str],
                 "date": rec["date"], "source": "lughayangu", "url": url}
 
         for gloss in en_short:
-            lexicon.append({"ekegusii": headword, "english": gloss, **meta})
+            lexicon.append({"ekegusii": headword, "english": gloss,
+                            "psa_relevance": psa_relevance(gloss, psa_vocab), **meta})
 
         # Pair only on an exact count match; never guess an alignment.
         if guz and len(guz) == len(en_long):
             for g, e in zip(guz, en_long):
-                sentences.append({"english": e, "ekegusii": g, **meta})
+                sentences.append({"english": e, "ekegusii": g,
+                                  "psa_relevance": psa_relevance(e, psa_vocab), **meta})
         else:
             for g in guz:
                 unpaired.append({"ekegusii": g, "english": "",
@@ -417,6 +471,17 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--output-dir", default="output")
     ap.add_argument("--lid-corpus", default=DEFAULT_LID_CORPUS)
+    ap.add_argument("--psa-corpus", default=DEFAULT_PSA_CORPUS,
+                    help="English PSA corpus used to score domain relevance")
+    ap.add_argument("--psa-only", type=float, default=None, metavar="THRESHOLD",
+                    help="keep only rows whose psa_relevance is >= THRESHOLD "
+                         "(e.g. 0.5). Off by default - see --help notes.")
+    ap.add_argument("--write-unpaired", action="store_true",
+                    help="also write examples that had no confident translation")
+    ap.add_argument("--write-lexicon", action="store_true",
+                    help="also write headword glosses. Off by default: 574 word "
+                         "pairs against a 44,205-type Ekegusii vocabulary is 0.09%% "
+                         "coverage, and of botanical terms the PSA corpus does not use.")
     ap.add_argument("--delay", type=float, default=1.5)
     ap.add_argument("--limit", type=int, default=0, help="stop after N pages (0 = all)")
     ap.add_argument("--boilerplate-min", type=int, default=4,
@@ -425,7 +490,6 @@ def main() -> int:
                     help="re-extract from the cache without crawling")
     ap.add_argument("--audit", action="store_true",
                     help="print every kept/dropped block with its reason")
-    ap.add_argument("--urls-file", help="path to a text file containing one URL per line to crawl")
     ap.add_argument("--restart", action="store_true")
     args = ap.parse_args()
 
@@ -438,6 +502,11 @@ def main() -> int:
 
     print("\n=== Training language identifier ===")
     lid = train_lid(args.lid_corpus)
+    psa_vocab = load_psa_vocab(args.psa_corpus)
+    if psa_vocab is None:
+        print(f"  no PSA corpus at {args.psa_corpus} - psa_relevance will be blank")
+        if args.psa_only is not None:
+            raise SystemExit("--psa-only needs --psa-corpus to exist.")
 
     cache: Dict[str, Dict] = {}
     if os.path.exists(cache_path) and not args.restart:
@@ -456,16 +525,11 @@ def main() -> int:
             return 1
 
         print("\n=== Enumerating word pages ===")
-        if args.urls_file:
-            print(f"  loading URLs from file: {args.urls_file}")
-            with open(args.urls_file, encoding="utf-8") as fh:
-                urls = {line.strip() for line in fh if line.strip()}
-        else:
-            urls = urls_from_sitemap(fetcher)
-            print(f"  from sitemap: {len(urls)}")
-            if len(urls) < 50:
-                print("  sitemap thin - falling back to pagination")
-                urls |= urls_from_pagination(fetcher)
+        urls = urls_from_sitemap(fetcher)
+        print(f"  from sitemap: {len(urls)}")
+        if len(urls) < 50:
+            print("  sitemap thin - falling back to pagination")
+            urls |= urls_from_pagination(fetcher)
         todo = sorted(urls - set(cache))
         if args.limit:
             todo = todo[:args.limit]
@@ -499,19 +563,34 @@ def main() -> int:
               f" before trusting the output.")
 
     print("\n=== Extracting ===")
-    sentences, lexicon, unpaired = extract(cache, lid, boilerplate, audit=args.audit)
+    sentences, lexicon, unpaired = extract(cache, lid, boilerplate,
+                                           psa_vocab=psa_vocab, audit=args.audit)
+
+    if args.psa_only is not None:
+        before_s, before_l = len(sentences), len(lexicon)
+        sentences = [r for r in sentences if (r.get("psa_relevance") or 0) >= args.psa_only]
+        lexicon = [r for r in lexicon if (r.get("psa_relevance") or 0) >= args.psa_only]
+        print(f"  --psa-only {args.psa_only}: sentences {before_s} -> {len(sentences)}, "
+              f"lexicon {before_l} -> {len(lexicon)}")
 
     s_path = os.path.join(args.output_dir, "lughayangu_sentences.csv")
-    l_path = os.path.join(args.output_dir, "lughayangu_lexicon.csv")
-    u_path = os.path.join(args.output_dir, "lughayangu_unpaired.csv")
-    cols = ["headword", "contributor", "date", "source", "url"]
+    cols = ["headword", "psa_relevance", "contributor", "date", "source", "url"]
     n_s = write_csv(s_path, sentences, ["english", "ekegusii"] + cols)
-    n_l = write_csv(l_path, lexicon, ["ekegusii", "english"] + cols)
-    n_u = write_csv(u_path, unpaired, ["ekegusii", "english", "reason"] + cols)
+    print(f"\n  {n_s:>6,} sentence pairs  -> {s_path}")
 
-    print(f"\n  {n_s:>6,} sentence pairs   -> {s_path}")
-    print(f"  {n_l:>6,} lexicon entries  -> {l_path}")
-    print(f"  {n_u:>6,} unpaired (review) -> {u_path}")
+    if args.write_lexicon:
+        l_path = os.path.join(args.output_dir, "lughayangu_lexicon.csv")
+        n_l = write_csv(l_path, lexicon, ["ekegusii", "english"] + cols)
+        print(f"  {n_l:>6,} lexicon entries -> {l_path}")
+    else:
+        print(f"  {len(lexicon):>6,} lexicon entries discarded (--write-lexicon to keep)")
+
+    if args.write_unpaired:
+        u_path = os.path.join(args.output_dir, "lughayangu_unpaired.csv")
+        n_u = write_csv(u_path, unpaired, ["ekegusii", "english", "reason"] + cols)
+        print(f"  {n_u:>6,} unpaired        -> {u_path}")
+    else:
+        print(f"  {len(unpaired):>6,} unpaired rows discarded (--write-unpaired to keep)")
 
     if sentences:
         print("\n=== Sample ===")
