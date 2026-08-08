@@ -174,13 +174,41 @@ def plan_batch(args, vocab: int) -> tuple:
     return batch, accum, per_example
 
 
+# Generation parameters must live on `model.generation_config` in transformers
+# v5. If any are left on `model.config`, save_pretrained() raises - which happens
+# at the FIRST checkpoint, i.e. after you have already burned the GPU time.
+GENERATION_ONLY = (
+    "max_length", "min_length", "num_beams", "early_stopping", "length_penalty",
+    "no_repeat_ngram_size", "encoder_no_repeat_ngram_size", "num_return_sequences",
+    "do_sample", "top_k", "top_p", "temperature", "repetition_penalty",
+    "diversity_penalty", "num_beam_groups", "bad_words_ids", "forced_bos_token_id",
+    "forced_eos_token_id", "output_scores", "return_dict_in_generate",
+)
+# NB: decoder_start_token_id and pad_token_id stay on config - the forward pass
+# uses them to shift labels, they are not generation-only.
+
+
+def tidy_generation_config(model, max_len):
+    """Move generation params off model.config so checkpoints can be saved."""
+    moved = []
+    for key in GENERATION_ONLY:
+        if key in model.config.__dict__:
+            setattr(model.generation_config, key, model.config.__dict__[key])
+            del model.config.__dict__[key]
+            moved.append(key)
+    model.generation_config.max_length = max_len
+    if moved:
+        print(f"  moved {moved} from config to generation_config")
+    return model
+
+
 def train_one(name, data_file, init_from, lr, epochs, out_dir, tok, args):
     print("=" * 70, flush=True)
     print(f"  {name}   init={Path(init_from).name}  lr={lr}  epochs={epochs}")
     print("=" * 70, flush=True)
 
     model = AutoModelForSeq2SeqLM.from_pretrained(init_from)
-    model.config.max_length = args.max_len
+    tidy_generation_config(model, args.max_len)
     vocab = model.get_input_embeddings().weight.shape[0]
 
     batch, accum, per_example = plan_batch(args, vocab)
