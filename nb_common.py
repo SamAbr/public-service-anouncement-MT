@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -267,6 +268,77 @@ def require_files(*paths, allow_download: bool = True) -> None:
             )
         size = path.stat().st_size / 1024 ** 2
         print(f"  ok  {path.name:<34} {size:8.1f} MB")
+
+
+# ---------------------------------------------------------------------------
+# NLLB TOKENIZER HELPERS
+# ---------------------------------------------------------------------------
+# `tokenizer.additional_special_tokens` used to be the way to enumerate NLLB's
+# language codes, but newer transformers releases dropped it from NllbTokenizer
+# ("NllbTokenizer has no attribute additional_special_tokens"), and
+# `lang_code_to_id` is deprecated. These helpers work whichever version is
+# installed, so the notebooks do not break on an environment upgrade.
+
+LANG_CODE_RE = re.compile(r"^[a-z]{3}_[A-Z][a-z]{3}$")
+
+
+def nllb_language_tokens(tok) -> list:
+    """
+    Every NLLB language code the tokenizer knows.
+
+    Tries the documented attributes first and falls back to the vocabulary,
+    which is the one thing whose shape never changes: an NLLB language code is
+    always three lowercase letters, an underscore, then a title-case four-letter
+    script - `eng_Latn`, `swh_Latn`, `zho_Hans`.
+    """
+    candidates = (
+        lambda: getattr(tok, "additional_special_tokens", None),
+        lambda: (getattr(tok, "special_tokens_map", None) or {}).get("additional_special_tokens"),
+        lambda: list(getattr(tok, "lang_code_to_id", None) or {}),
+    )
+    for source in candidates:
+        try:
+            values = source()
+        except Exception:
+            values = None
+        if values:
+            hits = sorted(t for t in values if LANG_CODE_RE.match(str(t)))
+            if hits:
+                return hits
+    return sorted(t for t in tok.get_vocab() if LANG_CODE_RE.match(t))
+
+
+def add_language_token(tok, model, new_lang: str, init_from: str):
+    """
+    Add a new language to an NLLB tokenizer and model, seeding its embedding
+    from an existing related language rather than from noise.
+
+    Uses `add_tokens(..., special_tokens=True)` rather than
+    `add_special_tokens({"additional_special_tokens": [...]})`: the latter needs
+    the current list, which newer versions no longer expose, and in some
+    versions it *replaces* that list instead of extending it.
+
+    Returns (new_token_id, source_token_id).
+    """
+    import torch
+
+    if tok.convert_tokens_to_ids(init_from) == tok.unk_token_id:
+        raise ValueError(f"{init_from!r} is not in this model's vocabulary")
+
+    tok.add_tokens([new_lang], special_tokens=True)
+    model.resize_token_embeddings(len(tok))
+
+    new_id = tok.convert_tokens_to_ids(new_lang)
+    src_id = tok.convert_tokens_to_ids(init_from)
+    if new_id == tok.unk_token_id:
+        raise RuntimeError(f"{new_lang!r} was not added to the tokenizer")
+
+    with torch.no_grad():
+        emb = model.get_input_embeddings().weight
+        emb[new_id] = emb[src_id].clone()
+        # a little noise so the two tokens can diverge during training
+        emb[new_id] += torch.randn_like(emb[new_id]) * 0.01 * emb.std()
+    return new_id, src_id
 
 
 def save_json(obj, path) -> None:
