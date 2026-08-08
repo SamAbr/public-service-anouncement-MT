@@ -10,11 +10,20 @@ __pycache__/
 *.pyd
 .ipynb_checkpoints/
 
-# Data outputs & checkpoints
-*.json
+# Trained models, checkpoints and figures - far too large for git.
+# The notebooks write everything here; nothing in it needs to be versioned.
+artifacts/
+
+# Generation checkpoints and logs
+output/psa_generation_checkpoint.json
+output/provenance_log.json
+output/lughayangu_cache.json
+*.log
+
+# Manifests ARE committed - they document how each dataset was built, and the
+# notebooks read them. Do not add a blanket *.json rule here again.
 
 # IDE and system files
 .idea/
 .vscode/
 .system_generated/
-*.log
