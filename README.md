@@ -42,8 +42,6 @@ All generated datasets are available in the `output/` directory and committed to
 | `output/psa_parallel_dataset.csv` | Final parallel corpus (English · Kiswahili · Somali · Luo) |
 | `output/bible_en_guz_swh.csv` | 30,863 English · Ekegusii · Kiswahili aligned triples (Bible + merged Storybooks) |
 | `output/lughayangu_sentences.csv` | 316 contemporary English-Ekegusii sentence pairs scraped from lughayangu.com |
-| `output/lughayangu_lexicon.csv` | 574 Ekegusii-English lexicon glosses scraped from lughayangu.com |
-| `output/lughayangu_unpaired.csv` | 280 unpaired Ekegusii definitions (retained for manual review) |
 | `output/corpus_manifest.json` | Source translation IDs, counts, and filter statistics |
 
 ---
@@ -136,7 +134,7 @@ psa_generator/
 │
 ├── ekegusii/
 │   ├── build_trilingual_corpus.py  # English·Ekegusii·Kiswahili verse aligner (eBible USFM)
-│   └── scrape_lughayangu.py        # Scrapes Ekegusii dictionary entries from lughayangu.com
+│   └── scrape_lughayangu.py        # Contemporary English-Ekegusii sentence pairs (lughayangu.com)
 │
 ├── tests/
 │   ├── verify_dataset.py           # Validates columns, format, and null values
@@ -167,8 +165,6 @@ psa_generator/
     ├── psa_parallel_dataset.csv
     ├── bible_en_guz_swh.csv
     ├── lughayangu_sentences.csv
-    ├── lughayangu_lexicon.csv
-    ├── lughayangu_unpaired.csv
     └── corpus_manifest.json
 ```
 

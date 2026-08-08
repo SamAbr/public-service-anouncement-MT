@@ -135,18 +135,25 @@ All source IDs, stage counts, and per-filter drop counts are recorded in `output
 
 ---
 
-## 6. Lughayangu Dictionary Scraper (ekegusii/scrape_lughayangu.py)
+## 6. Contemporary Sentence Pairs (ekegusii/scrape_lughayangu.py)
 
-To supplement the Bible corpus with contemporary, everyday conversational language, we developed a scraper for `lughayangu.com` (a Kenyan community dictionary).
+The Bible corpus supplies scale but a single, archaic register. To add contemporary everyday language, we scraped `lughayangu.com`, a Kenyan community dictionary whose entries carry example sentences with English translations.
 
 ### Scraping Methodology
 1. **Harvester phase**: The sitemap is thin and lacks word URLs. To discover dictionary pages, we queried the global search engine with the top 300 most frequent words from the Bible corpus, harvesting **364 unique Ekegusii word URLs**.
 2. **Polite Crawling**: Checks `robots.txt` at runtime, identifies itself with a contact User-Agent, and enforces a rate-limit of 1.5 seconds per request.
 3. **Character-trigram Language Identifier**: Learns on `output/bible_en_guz_swh.csv` (achieving 99.5%+ accuracy) to classify blocks as English, Ekegusii, or Kiswahili, filtering out interface text and off-target languages.
 4. **Boilerplate Suppression**: Automatically detects and discards blocks appearing across multiple pages (e.g. login buttons, headers, footer notices).
-5. **Yield**:
-   - `output/lughayangu_sentences.csv`: **316** clean contemporary sentence pairs.
-   - `output/lughayangu_lexicon.csv`: **574** vocabulary glosses.
-   - `output/lughayangu_unpaired.csv`: **280** unpaired definitions.
+5. **No fabricated alignments**: an Ekegusii example is paired with an English translation only when a page yields equal counts of each. Pages failing that test are discarded rather than guessed at.
+6. **Yield**: `output/lughayangu_sentences.csv` — **316** contemporary sentence pairs. Language identity of both sides was verified post hoc with the same classifier: 316/316 English on the English side, 316/316 Ekegusii on the Ekegusii side.
+
+### Why the headword lexicon was discarded
+The crawl also produced 574 Ekegusii-English headword glosses. These were measured against the project's own corpora and dropped:
+
+* **Coverage is negligible.** 574 word pairs against the 44,205 Ekegusii word types attested in the Bible corpus is 0.09% of the vocabulary.
+* **The vocabulary is the wrong vocabulary.** The glosses are overwhelmingly botanical (*black nightshade, napier grass, cowpeas leaves, arrowroots*). Their English equivalents are essentially unattested in the 50,318-PSA corpus.
+* **The real gap lies elsewhere.** Of the 5,837 English content-word types in the PSA corpus, **3,130 (53.6% of types, 42.3% of tokens)** never occur anywhere in the aligned Bible corpus — dominated by institutional and administrative vocabulary (*portal, county, HELB, KUCCPS, iTax, bursary, pastoralists, smallholder, Huduma*). No community plant dictionary addresses this; closing it requires Ekegusii civic and administrative text.
+
+The scraper retains a `--write-lexicon` flag for reproducibility, but does not emit the lexicon by default.
 
 
