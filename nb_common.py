@@ -78,7 +78,16 @@ EXTENDED_MODEL = ARTIFACTS / "nllb600m-guz-init"      # notebook 04
 STAGE1_MODEL = ARTIFACTS / "nllb600m-stage1-general"   # Bible + storybooks only
 STAGE2_MODEL = ARTIFACTS / "nllb600m-stage2-psa"       # stage 1 -> PSA + replay
 MIXED_MODEL = ARTIFACTS / "nllb600m-mixed-control"     # everything at once
-FINETUNED_MODEL = STAGE2_MODEL                          # the headline model
+
+# The headline model is the SINGLE-PASS one, not the curriculum.
+#
+# `mixed` was built as the control for the two-stage hypothesis and beat it on
+# every test set: +6.04 chrF2++ on real PSAs (40.97 vs 34.93), and higher than
+# stage 1 even on scripture, so it shows no forgetting at all. The two-stage run
+# also took ~9% more gradient steps and still lost, which rules out training
+# budget as the explanation. The ablation falsified the hypothesis it was
+# designed to test; the honest response is to ship the control.
+FINETUNED_MODEL = MIXED_MODEL
 
 # ---------------------------------------------------------------------------
 # LANGUAGE CODES

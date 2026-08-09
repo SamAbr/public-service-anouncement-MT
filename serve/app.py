@@ -9,7 +9,13 @@ sentence and watch the adaptation gain happen instead of reading it off a table:
             floor, not a fair comparison - see NOTE_STOCK below.
     stage1  fine-tuned on Bible + storybooks. The model knows Ekegusii.
     stage2  stage 1, then adapted on Kenyan PSAs with Bible replay.
-    mixed   control - everything in one pass, no curriculum.
+    mixed   everything in one pass, no curriculum. THE RELEASED MODEL.
+
+The naming is a fossil worth explaining: "mixed" was built as the *control* for
+a two-stage curriculum, and it beat the curriculum on every test set - by 6.04
+chrF2++ on real PSAs, while also scoring higher than stage 1 on scripture. The
+ablation falsified the hypothesis it was designed to test, so the control is
+what gets shipped and stage 2 is kept only as evidence for that claim.
 
 The three fine-tuned checkpoints live in *private* Hugging Face repositories,
 so the process needs HF_TOKEN in its environment. Nothing here writes to the
@@ -113,20 +119,21 @@ SYSTEMS: "OrderedDict[str, dict]" = OrderedDict([
     }),
     ("stage2", {
         "repo": HF_STAGE2,
-        "label": "Stage 2 · PSA-adapted",
+        "label": "Stage 2 · curriculum",
         "target": GUZ,
-        "note": "Stage 1, then adapted on Kenyan PSAs with Bible replay. "
-                "The headline model.",
-        "role": "headline",
+        "note": "Stage 1, then adapted on Kenyan PSAs with Bible replay. The "
+                "two-stage curriculum — which lost to the single pass by 6.04 "
+                "chrF2++ and is kept as the evidence for that.",
+        "role": "ablation",
         "private": True,
     }),
     ("mixed", {
         "repo": HF_MIXED,
-        "label": "Mixed control",
+        "label": "Single pass",
         "target": GUZ,
-        "note": "All the same data in a single pass, no curriculum. Exists to "
-                "answer whether the two-stage ordering earned its place.",
-        "role": "control",
+        "note": "All the data in one pass, no curriculum. Best on every test "
+                "set, including scripture. The released model.",
+        "role": "headline",
         "private": True,
     }),
 ])
