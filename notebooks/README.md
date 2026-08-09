@@ -11,7 +11,7 @@ name of the next notebook when it finishes.
 | 04 | `04_extend_tokenizer.ipynb` | Adds `guz_Latn` to NLLB and initialises it from Kikuyu; measures subword fertility | 2–3 min |
 | 05 | `05_finetune.ipynb` | Trains all three models: stage 1, stage 2, and the mixed control | 8–13 h total, GPU |
 | 06 | `06_evaluate.ipynb` | Four-way comparison with per-domain breakdown and bootstrap CIs | 45–90 min, GPU |
-| 07 | `07_inference_and_export.ipynb` | Translation helper, bulk PSA→Ekegusii draft, post-editing worksheet, export | minutes–2 h |
+| 07 | `07_inference_and_export.ipynb` | Translation helper, bulk PSA→Ekegusii draft, post-editing worksheet, and export of **all three** checkpoints to the Hub | minutes–2 h |
 
 ## The experiment
 
@@ -61,7 +61,22 @@ The branch matters. `nb_common.GITHUB_BRANCH` is `"master"` — this repo has bo
 `git push origin HEAD:master` (see `push_to_github.sh`). If you ever move to
 `main`, change `GITHUB_BRANCH` to match or every data download will 404.
 
-Trained models land in `artifacts/` and are **not** pushed — far too large.
+Trained models land in `artifacts/` and are **not** pushed to GitHub — its
+per-file limit is 100 MB against ~2.4 GB of weights. Notebook 07 publishes all
+three to the Hugging Face Hub instead: stage 1 (the baseline), stage 2 (the
+headline model) and the mixed control. Publishing only stage 2 would leave the
+paper's central comparison unverifiable by anyone else.
+
+Confirm the uploads are actually usable before citing them:
+
+```bash
+python tests/verify_hf_uploads.py            # metadata + tokenizer, ~5 MB
+python tests/verify_hf_uploads.py --full     # also generates Ekegusii, ~7 GB
+```
+
+That script exists for one specific failure mode: `guz_Latn` is an *added*
+token, so a repository that received the weights but not the tokenizer looks
+healthy, downloads without error, and cannot produce Ekegusii at all.
 Copy them off the node yourself.
 
 ## Hardware notes (A100-SXM4-80GB, 22 vCPU, 118 GB RAM)

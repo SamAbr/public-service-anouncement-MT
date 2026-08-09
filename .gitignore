@@ -27,3 +27,7 @@ output/lughayangu_cache.json
 .idea/
 .vscode/
 .system_generated/
+
+# Deployment secrets. serve/.env holds a Hugging Face token - never commit it.
+# serve/.env.example is the committed template.
+serve/.env

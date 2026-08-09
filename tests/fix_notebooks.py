@@ -20,7 +20,6 @@ left untouched.
 
 from __future__ import annotations
 
-import ast
 import json
 import sys
 from pathlib import Path
@@ -66,7 +65,10 @@ def verify(path: Path) -> list:
             continue
         code = "".join(cell["source"])
         try:
-            ast.parse(code)
+            # compile(), not ast.parse(). Some errors - notably a walrus operator
+            # in a comprehension's iterable - are raised when the symbol table is
+            # built, which ast.parse() never does. ast.parse accepts them happily.
+            compile(code, f"{path.name}:cell{i}", "exec")
         except SyntaxError as exc:
             problems.append(f"{path.name} cell {i}: {exc.msg} (line {exc.lineno})")
     return problems
