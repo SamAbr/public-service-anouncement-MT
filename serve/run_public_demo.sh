@@ -10,10 +10,14 @@
 # WHAT THIS IS NOT: permanent. A quick tunnel's hostname is random and changes
 # every time this script runs, and the URL dies when this process or the node
 # does. Use it for a live demo. For a link that has to keep working - a link in
-# a paper - it needs a host that outlives the session.
+# a paper - the service has to outlive the session.
 #
 # Loads models from artifacts/ when they are present, so on the training node it
 # starts in seconds and needs no Hugging Face token at all.
+#
+# Deliberately uses NO curl, wget or git: the GPU node has none of them. Python
+# is the one interpreter a Jupyter node is guaranteed to have, so it does the
+# downloading and the health-checking too.
 
 set -euo pipefail
 
@@ -21,6 +25,11 @@ PORT="${PORT:-8000}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$HERE")"
 cd "$HERE"
+
+PY="$(command -v python || command -v python3 || true)"
+if [ -z "$PY" ]; then
+  echo "no python on PATH - cannot continue"; exit 1
+fi
 
 # ---- models: prefer the local checkpoints over downloading them again -------
 LOCAL_MIXED="$ROOT/artifacts/nllb600m-mixed-control"
@@ -41,15 +50,20 @@ export RATE_LIMIT_PER_MIN="${RATE_LIMIT_PER_MIN:-30}"
 CF="$HERE/.cloudflared"
 if [ ! -x "$CF" ]; then
   echo "downloading cloudflared ..."
-  ARCH="$(uname -m)"
-  case "$ARCH" in
-    x86_64)  SUFFIX=amd64 ;;
-    aarch64|arm64) SUFFIX=arm64 ;;
-    *) echo "unsupported architecture: $ARCH"; exit 1 ;;
-  esac
-  curl -fsSL -o "$CF" \
-    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${SUFFIX}"
+  "$PY" - "$CF" <<'PYEOF'
+import platform, sys, urllib.request
+dest = sys.argv[1]
+arch = {"x86_64": "amd64", "amd64": "amd64",
+        "aarch64": "arm64", "arm64": "arm64"}.get(platform.machine())
+if arch is None:
+    sys.exit(f"unsupported architecture: {platform.machine()}")
+url = ("https://github.com/cloudflare/cloudflared/releases/latest/download/"
+       f"cloudflared-linux-{arch}")
+print(f"  {url}")
+urllib.request.urlretrieve(url, dest)
+PYEOF
   chmod +x "$CF"
+  echo "  ok ($(wc -c < "$CF") bytes)"
 fi
 
 cleanup() {
@@ -60,19 +74,31 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+alive() {
+  "$PY" - "$1" <<'PYEOF' >/dev/null 2>&1
+import sys, urllib.request
+urllib.request.urlopen(sys.argv[1], timeout=3).read()
+PYEOF
+}
+
 # ---- API -------------------------------------------------------------------
 echo "starting the API on 127.0.0.1:$PORT ..."
-python -m uvicorn app:app --host 127.0.0.1 --port "$PORT" > "$HERE/api.log" 2>&1 &
+"$PY" -m uvicorn app:app --host 127.0.0.1 --port "$PORT" > "$HERE/api.log" 2>&1 &
 API_PID=$!
 
-for i in $(seq 1 180); do
-  if curl -fsS "http://127.0.0.1:$PORT/api/health" > /dev/null 2>&1; then break; fi
+for _ in $(seq 1 180); do
+  if alive "http://127.0.0.1:$PORT/api/health"; then break; fi
   if ! kill -0 "$API_PID" 2>/dev/null; then
-    echo "the API died on startup. Last lines of serve/api.log:"; tail -30 "$HERE/api.log"; exit 1
+    echo "the API died on startup. Last lines of serve/api.log:"
+    tail -30 "$HERE/api.log"; exit 1
   fi
   sleep 1
 done
-echo "API is up (loading the model can take another minute; watch serve/api.log)"
+
+if ! alive "http://127.0.0.1:$PORT/api/health"; then
+  echo "the API never became healthy. serve/api.log:"; tail -30 "$HERE/api.log"; exit 1
+fi
+echo "API is up (the model may still be loading; watch serve/api.log)"
 
 # ---- tunnel ----------------------------------------------------------------
 echo "opening the tunnel ..."
@@ -83,11 +109,12 @@ echo "opening the tunnel ..."
 TUNNEL_PID=$!
 
 URL=""
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   URL="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$HERE/tunnel.log" | head -1 || true)"
   [ -n "$URL" ] && break
   if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
-    echo "the tunnel died. Last lines of serve/tunnel.log:"; tail -30 "$HERE/tunnel.log"; exit 1
+    echo "the tunnel died. Last lines of serve/tunnel.log:"
+    tail -30 "$HERE/tunnel.log"; exit 1
   fi
   sleep 1
 done
