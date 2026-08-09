@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import json
 import logging
 import os
 import re
@@ -88,6 +89,23 @@ MAX_NEW_TOKENS = int(_env("MAX_NEW_TOKENS", "128"))
 MAX_CHARS = int(_env("MAX_CHARS", "4000"))
 MAX_SEGMENTS = int(_env("MAX_SEGMENTS", "40"))
 
+# Which systems this instance serves. The public demo runs ONE model - four of
+# them on a 2 vCPU box would make every visitor wait a minute for an answer, and
+# a stranger who wants an Ekegusii translation does not care about the ablation.
+# Set ENABLED_SYSTEMS=stock,stage1,stage2,mixed for the internal comparison view.
+ENABLED_SYSTEMS = [s.strip() for s in _env("ENABLED_SYSTEMS", "mixed").split(",") if s.strip()]
+
+# Where corrections go. A dataset repo id, e.g. "samuelabrha/ekegusii-psa-feedback".
+# Unset, feedback is appended to a local file and lost when the container dies -
+# fine for a laptop, useless on a Space, so set it before sharing the link.
+FEEDBACK_REPO = _env("FEEDBACK_REPO", "")
+FEEDBACK_FILE = HERE / "feedback.jsonl"
+
+# Requests per minute per client IP. This matters the moment the service is
+# reachable from the internet: it is an unauthenticated endpoint in front of a
+# GPU, and a single loop can occupy the card indefinitely. 0 disables it.
+RATE_LIMIT_PER_MIN = int(_env("RATE_LIMIT_PER_MIN", "30"))
+
 ENG, SWH, GUZ = "eng_Latn", "swh_Latn", "guz_Latn"
 
 # NOTE_STOCK -------------------------------------------------------------
@@ -138,9 +156,14 @@ SYSTEMS: "OrderedDict[str, dict]" = OrderedDict([
     }),
 ])
 
+unknown_systems = [s for s in ENABLED_SYSTEMS if s not in SYSTEMS]
+if unknown_systems:
+    raise SystemExit(f"ENABLED_SYSTEMS names systems that do not exist: {unknown_systems}")
+SYSTEMS = OrderedDict((k, v) for k, v in SYSTEMS.items() if k in ENABLED_SYSTEMS)
+
 SOURCE_LANGUAGES = [
-    {"code": ENG, "label": "English"},
-    {"code": SWH, "label": "Kiswahili"},
+    {"code": ENG, "label": "English", "direction": "English → Ekegusii"},
+    {"code": SWH, "label": "Kiswahili", "direction": "Kiswahili → Ekegusii"},
 ]
 
 # ---------------------------------------------------------------------------
@@ -261,11 +284,14 @@ class Registry:
     # -- inference ---------------------------------------------------------
 
     def _generate(self, tok, model, texts: list, src_lang: str, tgt_lang: str,
-                  beams: int, max_new_tokens: int) -> list:
+                  beams: int, max_new_tokens: int):
         """
         Blocking. Builds NLLB's input format by hand - [src_lang] tokens [eos] -
         which is exactly what notebook 06 does, so a number quoted in the paper
         and a string shown in this UI came out of the same code path.
+
+        Returns (texts, confidences), where a confidence is the geometric-mean
+        per-token probability of the chosen output. See NOTE_CONFIDENCE.
         """
         import torch
 
@@ -281,17 +307,30 @@ class Registry:
         with torch.no_grad():
             out = model.generate(input_ids=ids, attention_mask=(ids != pad).long(),
                                  forced_bos_token_id=tgt_id,
-                                 max_new_tokens=max_new_tokens, num_beams=beams)
-        return tok.batch_decode(out, skip_special_tokens=True)
+                                 max_new_tokens=max_new_tokens, num_beams=beams,
+                                 return_dict_in_generate=True, output_scores=True)
+
+        seqs = out.sequences
+        scores = getattr(out, "sequences_scores", None)
+        if scores is None:
+            # Greedy decoding does not populate sequences_scores; derive the same
+            # quantity from per-step logits instead.
+            trans = model.compute_transition_scores(
+                seqs, out.scores, normalize_logits=True)
+            finite = torch.isfinite(trans)
+            scores = (trans.masked_fill(~finite, 0.0).sum(-1)
+                      / finite.sum(-1).clamp(min=1))
+        conf = scores.exp().clamp(0.0, 1.0).tolist()
+        return tok.batch_decode(seqs, skip_special_tokens=True), conf
 
     async def translate(self, name: str, texts: list, src_lang: str,
-                        beams: int, max_new_tokens: int) -> list:
+                        beams: int, max_new_tokens: int):
         tgt_lang = SYSTEMS[name]["target"]
         if MOCK_MODE:
             await asyncio.sleep(0.25)
             tag = {"stock": "[kikuyu-ish]", "stage1": "[scriptural]",
                    "stage2": "[psa-register]", "mixed": "[one-pass]"}[name]
-            return [f"{tag} {t}" for t in texts]
+            return [f"{tag} {t}" for t in texts], [0.72] * len(texts)
         tok, model = await self.get(name)
         async with self._lock:
             return await asyncio.to_thread(
@@ -300,6 +339,27 @@ class Registry:
 
 
 registry = Registry()
+
+
+# NOTE_CONFIDENCE ------------------------------------------------------------
+# What the number is: the geometric-mean per-token probability the model assigned
+# to the output it chose. For beam search that is exp(sequences_scores), the
+# length-normalised sum of log-probabilities.
+#
+# What it is NOT: a probability that the translation is correct. Neural MT is
+# routinely confident and wrong, and this model has a documented vocabulary gap -
+# 53.6% of PSA content-word types never appeared in training. A fluent, confident
+# guess at "KUCCPS" is exactly the failure this score will not catch.
+#
+# The band thresholds below are eyeballed, not calibrated against accuracy. They
+# separate "the model was unsure" from "the model was not", nothing more, and the
+# UI says so. Calibrating them properly needs the human evaluation that has not
+# been done yet - do not present them as reliability estimates until it has.
+CONFIDENCE_BANDS = [(0.65, "high"), (0.45, "moderate"), (0.0, "low")]
+
+
+def band(conf: float) -> str:
+    return next(name for floor, name in CONFIDENCE_BANDS if conf >= floor)
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +414,51 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Ekegusii PSA translation", lifespan=lifespan)
+
+# ---------------------------------------------------------------------------
+# RATE LIMIT
+# ---------------------------------------------------------------------------
+# A fixed window per IP, held in memory. Not distributed, not exact at window
+# boundaries, and it resets on restart - all fine, because the job is to stop
+# one script from monopolising the GPU, not to bill anyone.
+
+_hits: dict = {}
+
+
+def client_ip(request) -> str:
+    """
+    Behind a tunnel or proxy, request.client.host is 127.0.0.1 for everyone,
+    which would rate-limit the whole internet as a single client. Cloudflare
+    sets CF-Connecting-IP; most other proxies set X-Forwarded-For.
+    """
+    cf = request.headers.get("cf-connecting-ip")
+    if cf:
+        return cf.strip()
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@app.middleware("http")
+async def rate_limit(request, call_next):
+    if RATE_LIMIT_PER_MIN <= 0 or not request.url.path.startswith("/api/"):
+        return await call_next(request)
+    if request.url.path in {"/api/health", "/api/systems", "/api/metrics"}:
+        return await call_next(request)
+
+    window = int(time.time() // 60)
+    ip = client_ip(request)
+    key = (ip, window)
+    _hits[key] = _hits.get(key, 0) + 1
+    if len(_hits) > 4096:                      # drop stale windows
+        for k in [k for k in _hits if k[1] < window]:
+            _hits.pop(k, None)
+    if _hits[key] > RATE_LIMIT_PER_MIN:
+        return JSONResponse(
+            {"detail": f"Rate limit: {RATE_LIMIT_PER_MIN} requests per minute. "
+                       f"This demo runs on a single shared GPU."}, status_code=429)
+    return await call_next(request)
 
 
 class TranslateRequest(BaseModel):
@@ -425,13 +530,21 @@ async def translate(req: TranslateRequest):
     for name in req.systems:
         t0 = time.perf_counter()
         try:
-            pieces = await registry.translate(name, texts, req.src_lang, beams, max_new)
+            pieces, confs = await registry.translate(
+                name, texts, req.src_lang, beams, max_new)
+            # Report the weakest segment, not the average. A paragraph whose
+            # first sentence is solid and whose third is a guess should not read
+            # as uniformly fine - the guess is the part someone must check.
+            worst = min(confs) if confs else 0.0
             results.append({
                 "system": name,
                 "label": SYSTEMS[name]["label"],
                 "target": SYSTEMS[name]["target"],
                 "output": rejoin(units, pieces),
                 "segments": len(texts),
+                "confidence": round(worst, 4),
+                "confidence_band": band(worst),
+                "per_segment": [round(c, 4) for c in confs],
                 "ms": round((time.perf_counter() - t0) * 1000),
                 "ok": True,
             })
@@ -440,6 +553,52 @@ async def translate(req: TranslateRequest):
             results.append({"system": name, "label": SYSTEMS[name]["label"],
                             "ok": False, "error": str(exc)})
     return {"src_lang": req.src_lang, "segments": len(texts), "results": results}
+
+
+class Feedback(BaseModel):
+    src_lang: str
+    source: str = Field(min_length=1, max_length=MAX_CHARS)
+    machine: str = Field(default="", max_length=MAX_CHARS)
+    correction: str = Field(default="", max_length=MAX_CHARS)
+    rating: str = ""           # "good" | "usable" | "wrong"
+    note: str = Field(default="", max_length=2000)
+    system: str = ""
+
+
+@app.post("/api/feedback")
+async def feedback(item: Feedback):
+    """
+    Record a native speaker's correction.
+
+    This is the most valuable thing the demo produces. Automatic metrics cannot
+    tell you whether the Ekegusii reads as a public notice rather than as
+    scripture; a Kisii speaker typing the right sentence can, and every
+    correction is a new training pair for the next round.
+    """
+    record = item.model_dump()
+    record["received"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    line = json.dumps(record, ensure_ascii=False)
+
+    with open(FEEDBACK_FILE, "a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
+
+    if not FEEDBACK_REPO:
+        # Say so plainly rather than implying it was saved somewhere durable.
+        log.warning("FEEDBACK_REPO unset - correction kept only on this container's "
+                    "disk, which is wiped on restart")
+        return {"ok": True, "stored": "local", "durable": False}
+
+    try:
+        from huggingface_hub import upload_file
+        await asyncio.to_thread(
+            upload_file,
+            path_or_fileobj=str(FEEDBACK_FILE), path_in_repo="feedback.jsonl",
+            repo_id=FEEDBACK_REPO, repo_type="dataset", token=HF_TOKEN)
+        return {"ok": True, "stored": FEEDBACK_REPO, "durable": True}
+    except Exception as exc:
+        log.exception("could not upload feedback")
+        # The correction is still on local disk; do not tell the user it is lost.
+        return {"ok": True, "stored": "local", "durable": False, "error": str(exc)}
 
 
 @app.get("/")
