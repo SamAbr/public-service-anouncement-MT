@@ -3,15 +3,23 @@
 Run these in order. Each one writes its outputs to `artifacts/` and prints the
 name of the next notebook when it finishes.
 
-| # | Notebook | What it does | Runtime |
+| Step | File | What it does | Runtime |
 |---|----------|--------------|---------|
+| 00 | `00_setup.ipynb` | Installs dependencies, checks the GPU, pulls every data file from GitHub | ~5 min |
 | 01 | `01_eda.ipynb` | Audits every corpus; measures the register gap between scripture and PSAs | ~2 min, CPU |
-| 02 | `02_retranslate_swahili.ipynb` | **OPTIONAL — not needed for the current plan.** Regenerates Kiswahili PSA targets with NLLB-1.3B. Only run it if you later add the `eng→swh` direction. | 40–90 min, GPU |
-| 03 | `03_build_training_data.ipynb` | Builds the stage-1 / stage-2 / mixed training sets with leakage checks | <1 min |
-| 04 | `04_extend_tokenizer.ipynb` | Adds `guz_Latn` to NLLB and initialises it from Kikuyu; measures subword fertility | 2–3 min |
-| 05 | `05_finetune.ipynb` | Trains all three models: stage 1, stage 2, and the mixed control | 8–13 h total, GPU |
-| 06 | `06_evaluate.ipynb` | Four-way comparison with per-domain breakdown and bootstrap CIs | 45–90 min, GPU |
-| 07 | `07_inference_and_export.ipynb` | Translation helper, bulk PSA→Ekegusii draft, post-editing worksheet, and export of **all three** checkpoints to the Hub | minutes–2 h |
+| 02 | `02_build_training_data.ipynb` | Builds the stage-1 / stage-2 / mixed training sets with leakage checks | <1 min |
+| 03 | `03_extend_tokenizer.ipynb` | Adds `guz_Latn` to NLLB and initialises it from Kikuyu; measures subword fertility | 2–3 min |
+| 04 | **`train_stages.py`** | Trains all three models: stage 1, stage 2, and the mixed control | 8–13 h total, GPU |
+| 05 | `04_evaluate.ipynb` | Four-way comparison with per-domain breakdown and bootstrap CIs | 45–90 min, GPU |
+| 06 | `05_inference_and_export.ipynb` | Translation helper, bulk PSA→Ekegusii draft, and export of **all three** checkpoints to the Hub | minutes–2 h |
+
+**Training is a script, not a notebook.** `train_stages.py` waits for free VRAM,
+recovers from OOM by halving the batch, and can resume a single stage — none of
+which survives a kernel restart. It is what produced the released weights, so it
+is what the sequence uses. Two earlier notebooks were removed for exactly this
+reason and are kept in `_removed/`: a Kiswahili re-translation step nothing
+downstream ever read, and a training notebook that was a second, subtly
+different path to weights nobody shipped.
 
 ## The experiment
 
@@ -24,10 +32,11 @@ Three models, identical data and hyperparameters except what is being tested:
 | **Mixed** | tokenizer-extended base | everything at once (80k) | control: was the ordering worth it? |
 
 Scope is **Ekegusii only**: `eng→guz` and `swh→guz`. Kiswahili appears as a
-source language, never a target, so the 50k Kiswahili PSA corpus is unused and
-notebook 02 can be skipped.
+source language, never a target, which is why the 50k Kiswahili PSA corpus goes
+unused — its targets were NLLB-600M's own output, so training a 600M model on
+them would have been self-distillation rather than learning.
 
-Notebook 06 computes three numbers that decide what you write up:
+Notebook 04 computes three numbers that decide what you write up:
 
 - **PSA gain** = stage2 − stage1 on real PSAs → was domain adaptation worth it?
 - **Forgetting** = stage1 − stage2 on the Bible → is `REPLAY_FRACTION` high enough?
@@ -62,7 +71,7 @@ The branch matters. `nb_common.GITHUB_BRANCH` is `"master"` — this repo has bo
 `main`, change `GITHUB_BRANCH` to match or every data download will 404.
 
 Trained models land in `artifacts/` and are **not** pushed to GitHub — its
-per-file limit is 100 MB against ~2.4 GB of weights. Notebook 07 publishes all
+per-file limit is 100 MB against ~2.4 GB of weights. Notebook 05 publishes all
 three to the Hugging Face Hub instead: stage 1 (the baseline), stage 2 (the
 headline model) and the mixed control. Publishing only stage 2 would leave the
 paper's central comparison unverifiable by anyone else.

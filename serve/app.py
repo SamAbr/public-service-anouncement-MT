@@ -1,7 +1,7 @@
 """
 app.py - a four-system Ekegusii translation service.
 
-Serves the same four systems notebook 06 evaluates, so a visitor can type a
+Serves the same four systems notebook 04 evaluates, so a visitor can type a
 sentence and watch the adaptation gain happen instead of reading it off a table:
 
     stock   facebook/nllb-200-distilled-600M, asked for kik_Latn (Kikuyu)
@@ -53,6 +53,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-7s %(m
 
 HERE = Path(__file__).resolve().parent
 STATIC = HERE / "static"
+STARTED = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION - everything tunable is an environment variable, because this
@@ -110,7 +111,7 @@ ENG, SWH, GUZ = "eng_Latn", "swh_Latn", "guz_Latn"
 
 # NOTE_STOCK -------------------------------------------------------------
 # Stock NLLB-200 has no guz_Latn token; asking it for Ekegusii is not
-# possible. Notebook 06 asks it for kik_Latn (Kikuyu) - the nearest Kenyan
+# possible. Notebook 04 asks it for kik_Latn (Kikuyu) - the nearest Kenyan
 # Bantu language it does support - to establish what "no Ekegusii support"
 # looks like numerically. The UI must label this honestly. It is a floor,
 # not a baseline, and presenting it as a comparison would be misleading.
@@ -287,7 +288,7 @@ class Registry:
                   beams: int, max_new_tokens: int):
         """
         Blocking. Builds NLLB's input format by hand - [src_lang] tokens [eos] -
-        which is exactly what notebook 06 does, so a number quoted in the paper
+        which is exactly what notebook 04 does, so a number quoted in the paper
         and a string shown in this UI came out of the same code path.
 
         Returns (texts, confidences), where a confidence is the geometric-mean
@@ -302,7 +303,7 @@ class Registry:
                    max_length=max_new_tokens - 2)["input_ids"] + [eos] for t in texts]
         width = max(len(e) for e in enc)
         # Left-pad: the encoder is bidirectional so the side does not change the
-        # result, but matching notebook 06 keeps demo and evaluation identical.
+        # result, but matching notebook 04 keeps demo and evaluation identical.
         ids = torch.tensor([[pad] * (width - len(e)) + e for e in enc]).to(model.device)
         with torch.no_grad():
             out = model.generate(input_ids=ids, attention_mask=(ids != pad).long(),
@@ -363,7 +364,7 @@ def band(conf: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# METRICS - the chrF numbers notebook 06 produced, shown beside the live output
+# METRICS - the chrF numbers notebook 04 produced, shown beside the live output
 # ---------------------------------------------------------------------------
 
 METRIC_CANDIDATES = [
@@ -399,8 +400,18 @@ async def lifespan(app: FastAPI):
         log.info("device=%s dtype=%s", registry.device, registry.dtype)
         if registry.device == "cpu":
             log.warning("no GPU visible - expect several seconds per sentence per system")
-        if not HF_TOKEN:
-            log.warning("HF_TOKEN is unset; the three private repositories will 401")
+        # Only warn when a token is actually needed. A repo id that resolves to a
+        # directory on this machine needs no authentication, and warning anyway
+        # sends people hunting for a token problem that does not exist - which is
+        # exactly what happened the first time this ran on the GPU node.
+        needs_token = [k for k, v in SYSTEMS.items()
+                       if v["private"] and not Path(v["repo"]).is_dir()]
+        if needs_token and not HF_TOKEN:
+            log.warning("HF_TOKEN is unset and these are private Hub repos, so "
+                        "they will 401: %s", ", ".join(needs_token))
+        for k, v in SYSTEMS.items():
+            if Path(v["repo"]).is_dir():
+                log.info("%s loads from local disk (%s) - no token needed", k, v["repo"])
         if PRELOAD:
             for name in SYSTEMS:
                 try:
@@ -471,7 +482,17 @@ class TranslateRequest(BaseModel):
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, **registry.describe(), "errors": registry.errors}
+    return {
+        "ok": True, **registry.describe(), "errors": registry.errors,
+        "pid": os.getpid(),
+        "started": STARTED,
+        # Exposed so a restart can be verified from outside. Without this, a
+        # stale process left holding the port looks identical to a fresh one.
+        "enabled_systems": list(SYSTEMS),
+        "feedback_repo": FEEDBACK_REPO or None,
+        "feedback_durable": bool(FEEDBACK_REPO),
+        "rate_limit_per_min": RATE_LIMIT_PER_MIN,
+    }
 
 
 @app.get("/api/systems")

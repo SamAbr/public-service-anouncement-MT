@@ -17,7 +17,7 @@ control won by 6.04 chrF2++ on real PSAs. That is a table until someone types
 each other.
 
 **On `stock`.** Ekegusii has no token in stock NLLB-200, so it *cannot* be asked
-for Ekegusii. Following notebook 06, it is asked for Kikuyu (`kik_Latn`), the
+for Ekegusii. Following notebook 04, it is asked for Kikuyu (`kik_Latn`), the
 nearest Kenyan Bantu language it does support. That establishes what "no
 Ekegusii support" looks like numerically. It is a floor, not a fair comparison,
 and the UI says so on the card. Do not let a slide turn it into one.
@@ -142,7 +142,7 @@ evicted least-recently-used and reloaded on demand: identical output, a pause
 when a visitor switches systems. `BEAMS=1` roughly halves CPU latency at a real
 cost in quality — only worth it on a CPU-only host.
 
-`BEAMS=4` is the default because it is what notebook 06 evaluated with, so a
+`BEAMS=4` is the default because it is what notebook 04 evaluated with, so a
 number quoted in the paper and a string shown on screen came out of the same
 settings. Change it and they no longer correspond.
 
@@ -183,12 +183,12 @@ meaning. `MAX_SEGMENTS` (default 40) caps how much one request may ask for.
 
 The chart reads `metrics/evaluation_results.csv`, falling back to
 `../artifacts/data/evaluation_results.csv`. Whichever columns exist are the
-columns it draws — so until `06_evaluate.ipynb` has been re-run with all three
+columns it draws — so until `04_evaluate.ipynb` has been re-run with all three
 checkpoints present, the mixed control is absent from the chart and the UI says
 so in a notice rather than quietly showing a three-bar chart as if it were
 complete.
 
-**After re-running notebook 06, copy the new CSV over `metrics/` and rebuild.**
+**After re-running notebook 04, copy the new CSV over `metrics/` and rebuild.**
 
 ---
 

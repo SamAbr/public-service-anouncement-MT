@@ -196,7 +196,7 @@ def main() -> int:
     print("=" * 68)
     for name, repo in notes:
         print(f"  NOTE  {name} lives at {repo} - update HF_MIXED in serve/.env "
-              f"and REPOS in notebook 07 to match")
+              f"and REPOS in notebook 05 to match")
     if failures:
         for name, why in failures:
             print(f"  FAIL  {name}: {why}")

@@ -82,6 +82,25 @@ PYEOF
 }
 
 # ---- API -------------------------------------------------------------------
+# Refuse to start on top of a process that is already serving this port.
+# Without this check the health poll below would succeed against the OLD
+# server, the script would report success, and any environment change made
+# since - FEEDBACK_REPO, ENABLED_SYSTEMS, RATE_LIMIT_PER_MIN - would silently
+# not apply. That failure is invisible and expensive.
+if alive "http://127.0.0.1:$PORT/api/health"; then
+  echo
+  echo "Something is ALREADY serving http://127.0.0.1:$PORT."
+  echo "That is almost certainly a previous run of this script that did not die."
+  echo "This one would appear to work while actually leaving the old settings in"
+  echo "place, so it is stopping instead."
+  echo
+  echo "Kill it:      pkill -f 'uvicorn app:app' ; pkill -f cloudflared"
+  echo "Or move over: PORT=8001 bash serve/run_public_demo.sh"
+  exit 1
+fi
+
+echo "feedback     : ${FEEDBACK_REPO:-(unset - corrections stay on this node and die with it)}"
+echo "rate limit   : $RATE_LIMIT_PER_MIN requests/min per IP"
 echo "starting the API on 127.0.0.1:$PORT ..."
 "$PY" -m uvicorn app:app --host 127.0.0.1 --port "$PORT" > "$HERE/api.log" 2>&1 &
 API_PID=$!

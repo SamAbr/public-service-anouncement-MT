@@ -31,3 +31,12 @@ output/lughayangu_cache.json
 # Deployment secrets. serve/.env holds a Hugging Face token - never commit it.
 # serve/.env.example is the committed template.
 serve/.env
+
+# Office lock files (created while a .pptx or .docx is open)
+~$*
+
+# Pruned notebooks kept locally for reference, not part of the released pipeline
+notebooks/_removed/
+
+# Scratch: device_bash cannot delete, so files to remove are parked here
+_to_delete/

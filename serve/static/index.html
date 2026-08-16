@@ -301,9 +301,14 @@ async function boot() {
 }
 
 function renderExamples() {
-  const lang = document.getElementById("src").value;
   const box = document.getElementById("examples");
   box.textContent = "";
+  /* The public demo ships no canned sentences. Prompts steer what people type,
+     and a demo that is only ever exercised on six sentences chosen by its author
+     tells you nothing. The comparison view keeps them - there the point IS to
+     hold the input fixed across four systems. */
+  if (SINGLE) return;
+  const lang = document.getElementById("src").value;
   (EXAMPLES[lang] || []).forEach(([name, body]) => {
     const b = el("button", "chip", name);
     b.onclick = () => { document.getElementById("text").value = body; };
@@ -445,29 +450,13 @@ async function sendFeedback() {
   btn.disabled = false;
 }
 
-/* ---------------------------------------------------- stat tiles (single) */
-/* Three unrelated magnitudes with no comparison between them is a stat-tile
-   job, not a chart. The delta against stock is the comparison that matters and
-   it rides along as secondary text. */
+/* No chrF on the public page. A visitor typing a sentence cannot act on a
+   corpus-level metric, and a number like "41.0" reads as a percentage-correct
+   score to anyone who does not know what chrF2++ is - which is nearly everyone.
+   The numbers belong in the paper and in the comparison view, where they are
+   next to the systems they describe. */
 function renderTiles() {
-  const box = document.getElementById("tiles");
-  box.textContent = "";
-  if (!SINGLE || !METRICS || !METRICS.rows.length) return;
-  const best = SYSTEMS[0].id;
-  const want = [["psa_ke_heldout", "Real PSAs"],
-                ["bible", "Scripture"],
-                ["lughayangu_contemporary", "Everyday prose"]];
-  want.forEach(([set, label]) => {
-    const row = METRICS.rows.find(r => r["test set"] === set && r.direction.startsWith("eng"));
-    if (!row) return;
-    const v = +row[`${best} chrF`], stock = +row["stock chrF"];
-    const t = el("div", "card tile");
-    t.append(el("div", "k", label), el("div", "v", isFinite(v) ? v.toFixed(1) : "—"),
-             el("div", "d", isFinite(stock)
-               ? `chrF2++ · ${(v - stock >= 0 ? "+" : "")}${(v - stock).toFixed(1)} vs stock NLLB`
-               : "chrF2++"));
-    box.append(t);
-  });
+  document.getElementById("tiles").textContent = "";
 }
 
 /* ---------------------------------------------------------------- chart */
@@ -593,11 +582,7 @@ function renderNotices(info) {
 
 function renderFooter() {
   document.getElementById("foot").innerHTML = SINGLE
-    ? "Fine-tuned from <code>facebook/nllb-200-distilled-600M</code>. Ekegusii "
-      + "(<code>guz_Latn</code>) is not in stock NLLB-200 — the token was added and "
-      + "seeded from Kikuyu (<code>kik_Latn</code>).<br>"
-      + "<b>This is a draft for a human to check, not a finished translation.</b> "
-      + "Never publish an unedited machine translation of a health or safety notice."
+    ? ""
     : "Fine-tuned from <code>facebook/nllb-200-distilled-600M</code>. Stock NLLB "
       + "cannot produce Ekegusii and is asked for Kikuyu instead — a floor, not a "
       + "fair comparison.<br>Machine output is a draft for human post-editing.";

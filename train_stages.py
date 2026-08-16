@@ -115,7 +115,7 @@ class TranslationDataset(Dataset):
 
 
 class Seq2SeqCollator:
-    """Pads, and guarantees decoder_input_ids exist (see notebook 05)."""
+    """Pads, and guarantees decoder_input_ids exist (see train_stages.py)."""
 
     def __init__(self, tok, model):
         self.base = DataCollatorForSeq2Seq(tok, model=model, label_pad_token_id=-100,
@@ -290,10 +290,10 @@ def main() -> int:
     C.set_seed()
     print(f"project root : {C.ROOT}")
     if not C.EXTENDED_MODEL.exists():
-        raise SystemExit(f"{C.EXTENDED_MODEL} missing - run notebook 04 first")
+        raise SystemExit(f"{C.EXTENDED_MODEL} missing - run notebook 03 first")
     for f in ("stage1.jsonl", "stage2.jsonl", "dev.jsonl"):
         if not (C.DATA / f).exists():
-            raise SystemExit(f"{C.DATA / f} missing - run notebook 03 first")
+            raise SystemExit(f"{C.DATA / f} missing - run notebook 02 first")
 
     wait_for_vram(args.min_free, args.wait_mins)
     tok = AutoTokenizer.from_pretrained(C.EXTENDED_MODEL)
@@ -310,7 +310,7 @@ def main() -> int:
             raise SystemExit("stage 2 continues from stage 1, which has not been trained")
         train_one(name, data, init, lr, epochs, out, tok, args)
 
-    print("\nall requested stages complete. Next: notebooks/06_evaluate.ipynb")
+    print("\nall requested stages complete. Next: notebooks/04_evaluate.ipynb")
     return 0
 
 

@@ -71,10 +71,11 @@ PSA_KE_TRAIN_CSV = OUTPUT / "psa_ke_train.csv"
 PSA_KE_TEST_CSV = OUTPUT / "psa_ke_test.csv"
 
 # Produced by the notebooks
-PSA_SWH_13B_CSV = OUTPUT / "psa_en_swh_nllb13b.csv"   # notebook 02 (optional)
-EXTENDED_MODEL = ARTIFACTS / "nllb600m-guz-init"      # notebook 04
+EXTENDED_MODEL = ARTIFACTS / "nllb600m-guz-init"      # notebook 03
 
-# Notebook 05 trains three models on identical data, for a three-way comparison:
+# train_stages.py trains three models on identical data for a three-way
+# comparison. The notebook that used to do this was removed: it was never the
+# path that produced the released weights.
 STAGE1_MODEL = ARTIFACTS / "nllb600m-stage1-general"   # Bible + storybooks only
 STAGE2_MODEL = ARTIFACTS / "nllb600m-stage2-psa"       # stage 1 -> PSA + replay
 MIXED_MODEL = ARTIFACTS / "nllb600m-mixed-control"     # everything at once
@@ -95,7 +96,7 @@ FINETUNED_MODEL = MIXED_MODEL
 
 ENG = "eng_Latn"
 SWH = "swh_Latn"
-GUZ = "guz_Latn"        # NOT in stock NLLB-200 - added in notebook 04
+GUZ = "guz_Latn"        # NOT in stock NLLB-200 - added in notebook 03
 GUZ_INIT_FROM = "kik_Latn"   # Kikuyu: Kenyan Bantu, nearest available neighbour
 
 BASE_MODEL = "facebook/nllb-200-distilled-600M"

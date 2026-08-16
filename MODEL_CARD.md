@@ -72,15 +72,18 @@ model is the **ablation that lost**; do not report its numbers as the result.
 
 ## How it was built
 
-`guz_Latn` was added to the tokenizer and its embedding initialised from
-`kik_Latn` (Kikuyu, the closest Kenyan Bantu language NLLB supports) plus 1%
-noise, rather than randomly. The released model was then trained in a single
-pass over **79,745 examples**:
+This is **transfer learning**: `guz_Latn` was added to the tokenizer and its
+embedding initialised from `kik_Latn` (Kikuyu, the closest Kenyan Bantu language
+NLLB supports) plus 1% noise, rather than randomly — so the new language starts
+from what the model already knows about related Bantu languages. The released
+model was then trained in a single pass over **62,669 unique parallel sentence
+pairs**, presented as 79,745 training examples (PSA data upsampled 4×):
 
-- **56,977 general** — Ekegusii Bible verses aligned to the Berean Standard
-  Bible and Neno Kiswahili, plus African Storybook pages and contemporary
-  sentence pairs.
-- **22,768 PSA** — real Kenyan public service announcements, upsampled ×4.
+- **56,977 general pairs** — Ekegusii Bible verses aligned to the Berean
+  Standard Bible and Neno Kiswahili, plus African Storybook pages and
+  contemporary sentence pairs.
+- **5,692 PSA pairs** — real Kenyan public service announcements, upsampled ×4
+  to 22,768 examples so the domain is not swamped by scripture.
 
 Full fine-tune, 8-bit AdamW, effective batch 48, lr 5e-5, 3 epochs, bf16,
 gradient checkpointing, on a single A100-SXM4-80GB.
@@ -118,7 +121,7 @@ each one; handing it a whole paragraph makes it drop clauses.
 - **The Ekegusii references were not verified by the authors.** The PSA corpus
   was supplied by the project supervisor; the translator and the
   quality-assurance process are unknown. No inter-annotator agreement exists.
-- **Most training data is scripture.** ~57k of ~80k examples are Bible verses,
+- **Most training data is scripture.** ~57k of the 62,669 unique pairs are Bible verses,
   so the model may still lean formal on unfamiliar input.
 - **Institutional vocabulary is thin.** 53.6% of English content-word types in
   the PSA corpus never appear in the aligned training data — portals, bursaries,

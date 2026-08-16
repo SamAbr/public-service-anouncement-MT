@@ -42,7 +42,7 @@ REPOS = {
     "mixed":  "nllb-200-600M-ekegusii-mixed",
 }
 
-# What notebook 06 reported, eng->guz on psa_ke_heldout. A repo that scores near
+# What notebook 04 reported, eng->guz on psa_ke_heldout. A repo that scores near
 # the wrong row is mislabelled.
 EXPECTED_CHRF = {"stage1": 23.96, "stage2": 34.93, "mixed": 40.97}
 
