@@ -36,10 +36,11 @@ data/lughayangu_cache.json
 # Pruned notebooks kept locally for reference, not part of the released pipeline
 **/notebooks/_removed/
 
-# Scratch: device_bash cannot delete, so files to remove are parked here
+# Scratch
 _to_delete/
+__probe.txt
 
-# The corpus generation project lives outside this repository now. A stale copy
-# may still sit here until it is deleted by hand; do not track it.
+# The corpus generation pipeline is a separate project and is not part of this
+# repository. If a copy is sitting in this folder, it is a leftover: do not
+# track it.
 corpus_generation/
-PSA-MT/

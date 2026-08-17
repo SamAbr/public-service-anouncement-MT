@@ -445,12 +445,15 @@ State these before anyone else does.
 - **The corpus is 90.7% scripture.** Nine tenths of what the model knows about
   Ekegusii comes from the Bible, which is archaic in register and narrow in
   subject matter. This, not model size, is the binding constraint on quality.
-- **The announcement translations are unverified.** The Ekegusii was supplied by
-  our supervisor rather than produced by us, and no member of the team is an
-  Ekegusii speaker, so we filtered for the failures we could detect mechanically
-  and took the rest on trust. A speaker has not spot-checked them.
-- **No human evaluation.** chrF2++ is a proxy. No speaker has yet rated a single
-  output, so quality claims are automatic-metric claims only.
+- **The announcement translations are unaudited.** The Ekegusii came from our
+  supervisor, who speaks the language, and a member of the team speaks it too.
+  But the translator behind that corpus and the process that produced it are
+  unrecorded, and nobody has re-checked it end to end. We filtered for the
+  failures a program can detect and took the rest on trust.
+- **No human evaluation.** chrF2++ is a proxy. No Ekegusii speaker has yet rated
+  a single output for fluency or adequacy, so every quality claim here is an
+  automatic-metric claim. This is the largest gap and the cheapest to close,
+  because the language is spoken within the team and by the supervisor.
 - **Everyday prose is the weakest direction**, at 32.98 chrF2++, which is exactly
   what a 111-pair contemporary sample predicts.
 - **Stock NLLB-200 is a floor, not a baseline.** It cannot produce Ekegusii, so
@@ -466,8 +469,8 @@ State these before anyone else does.
 - **Rebalance away from scripture.** A few thousand contemporary Ekegusii pairs
   would likely buy more than any architectural change.
 - **Have a speaker audit the announcement corpus.** It is the smallest part of
-  the data and the whole target domain, so an error rate there costs more than
-  anywhere else.
+  the data and the entire target domain, so an error rate there costs more than
+  anywhere else, and the expertise to check it is already on the team.
 - **Human evaluation** with Ekegusii speakers on the held-out announcements.
 - Extend the same transfer-learning recipe to other unsupported Kenyan languages.
 - Durable hosting for the demo. It currently runs on a shared GPU node that is

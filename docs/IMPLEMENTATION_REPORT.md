@@ -56,7 +56,7 @@ from scratch out of four sources.
 | Source | Records | Languages | What it gives |
 |---|---:|---|---|
 | Ekegusii Revised Bible (eBible) | 30,753 | en · guz · swh | Verse-aligned triples, the bulk of the language signal |
-| Kenyan PSA corpus (supervisor) | 4,082 | en · guz · swh | Real public notices, exactly on target |
+| Kenyan PSA corpus (supervisor) | 4,082 | en · guz · swh | Real public notices, exactly on target. 4,082 records become **5,692 directional pairs** |
 | Lughayangu | 316 | en · guz | Everyday sentences, scraped from 364 pages |
 | African Storybook | 110 | en · guz · swh | Contemporary prose |
 
@@ -398,9 +398,12 @@ reference. No fluency, adequacy or cultural-accuracy ratings from Ekegusii
 speakers exist. This is the largest gap and the demo's correction form is the
 mechanism for closing it. The brief asks for 100+ rated sentences.
 
-**References are unverified.** The PSA Ekegusii was supplied by the supervisor;
-the translator and quality-assurance process are unknown, and there is no
-inter-annotator agreement.
+**References are unaudited.** The PSA Ekegusii was supplied by the supervisor,
+who speaks the language, and one member of the team speaks it too. But the
+translator behind the corpus and the quality-assurance process that produced it
+are unrecorded, no one has re-checked it end to end, and there is no
+inter-annotator agreement. The capability to fix this is in the room, which is
+what makes leaving it undone the wrong call.
 
 **Scripture-heavy mixture.** About 57,000 of 62,669 pairs are Bible verses, so
 the model may lean formal on unfamiliar input.

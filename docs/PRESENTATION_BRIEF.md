@@ -51,12 +51,12 @@ number is the project's central risk and it drove every design decision after it
 
 ### 3.1 The corpus
 
-| Source | Pairs | Languages | Notes |
+| Source | Records | Languages | Notes |
 |---|---:|---|---|
 | Ekegusii Revised Bible | 30,753 | en · guz · swh | Verse-aligned triples. English from the Berean Standard Bible, Kiswahili from Neno: Bibilia Takatifu |
 | African Storybook | 110 | en · guz · swh | Contemporary narrative prose |
 | Lughayangu | 316 | en · guz | Everyday sentences, scraped from 364 pages |
-| Kenyan PSA corpus | 4,082 | en · guz · swh | Real public notices, supervisor-supplied |
+| Kenyan PSA corpus | 4,082 | en · guz · swh | Real public notices, supervisor-supplied. These 4,082 records become **5,692 directional pairs** |
 
 **Know your three numbers.** These get confused, and an examiner who spots the
 confusion will press on it:
@@ -291,9 +291,10 @@ reference. No fluency, adequacy or cultural-accuracy ratings from Ekegusii
 speakers. This is the largest outstanding gap, and the demo's correction form
 exists to close it.
 
-**Unverified references.** The PSA Ekegusii was supplied by the supervisor. The
-translator and the quality-assurance process are unknown; no inter-annotator
-agreement exists.
+**Unaudited references.** The PSA Ekegusii was supplied by the supervisor, who
+speaks the language, and a team member speaks it too. But the translator behind
+the corpus and the process that produced it are unrecorded, and no one has
+re-checked it end to end. No inter-annotator agreement exists.
 
 **Scripture-heavy mixture.** About 57,000 of the 62,669 unique pairs are Bible
 verses. The model may still lean formal on unfamiliar input.
