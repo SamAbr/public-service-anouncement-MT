@@ -286,10 +286,11 @@ downloaded model reproduced the ordering and the approximate values — 23.77 /
 
 ## 8. Limitations — say these before you are asked
 
-**No human evaluation.** Every number is an automatic metric against a single
-reference. No fluency, adequacy or cultural-accuracy ratings from Ekegusii
-speakers. This is the largest outstanding gap, and the demo's correction form
-exists to close it.
+**Little human evaluation.** Every number is an automatic metric against a
+single reference. Ekegusii speakers on the project have looked at output
+informally, but no structured fluency, adequacy or cultural-accuracy ratings
+have been collected at a size worth quoting. This is the largest outstanding
+gap, and the demo's correction form exists to close it.
 
 **Unaudited references.** The PSA Ekegusii was supplied by the supervisor, who
 speaks the language, and a team member speaks it too. But the translator behind

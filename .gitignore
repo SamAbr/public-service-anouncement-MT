@@ -44,3 +44,8 @@ __probe.txt
 # repository. If a copy is sitting in this folder, it is a leftover: do not
 # track it.
 corpus_generation/
+
+# Typeset write-ups. The markdown sources are tracked; the PDFs are built from
+# them with docs/gen_brief_pdf.py and kept out of the repository.
+docs/IMPLEMENTATION_REPORT.pdf
+docs/PRESENTATION_BRIEF.pdf

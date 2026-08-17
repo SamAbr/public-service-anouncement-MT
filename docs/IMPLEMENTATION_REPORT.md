@@ -351,7 +351,7 @@ serve/colab_demo.ipynb
 **The confidence label is the model's own certainty**, the geometric-mean
 per-token probability of the output it chose. It is *not* a probability of being
 correct, the band thresholds are uncalibrated, and the interface says so.
-Calibrating them requires the human evaluation we do not yet have.
+Calibrating them requires human ratings at a scale we have not yet collected.
 
 **The correction form is the most valuable thing the deployment produces.** Set
 `FEEDBACK_REPO` to a Hugging Face dataset repository or corrections are written
@@ -393,10 +393,12 @@ different path to the same thing.
 
 ## 9. Known limitations and open work
 
-**No human evaluation.** Every number is an automatic metric against a single
-reference. No fluency, adequacy or cultural-accuracy ratings from Ekegusii
-speakers exist. This is the largest gap and the demo's correction form is the
-mechanism for closing it. The brief asks for 100+ rated sentences.
+**Little human evaluation.** Every number reported is an automatic metric
+against a single reference. Ekegusii speakers on the project have looked at
+output informally, but no structured fluency, adequacy or cultural-accuracy
+ratings have been collected, and nothing has been scored at a sample size worth
+quoting. This is the largest gap and the demo's correction form is the mechanism
+for closing it. The brief asks for 100+ rated sentences.
 
 **References are unaudited.** The PSA Ekegusii was supplied by the supervisor,
 who speaks the language, and one member of the team speaks it too. But the

@@ -126,8 +126,10 @@ each one; handing it a whole paragraph makes it drop clauses.
 - **Institutional vocabulary is thin.** 53.6% of English content-word types in
   the PSA corpus never appear in the aligned training data — portals, bursaries,
   agency names. Expect weak handling of `HELB`, `KUCCPS`, `iTax` and similar.
-- **No human evaluation.** Every number here is an automatic metric against a
-  single reference. chrF2++ is reported in preference to BLEU because word
+- **Little human evaluation.** Every number here is an automatic metric against
+  a single reference. Ekegusii speakers on the project have looked at output
+  informally, but no structured ratings have been collected at a size worth
+  quoting. chrF2++ is reported in preference to BLEU because word
   n-grams are structurally unfair to an agglutinative Bantu language, but no
   automatic metric tells you whether the output reads as a public notice rather
   than as scripture.
