@@ -45,7 +45,8 @@ __probe.txt
 # track it.
 corpus_generation/
 
-# Typeset write-ups. The markdown sources are tracked; the PDFs are built from
-# them with docs/gen_brief_pdf.py and kept out of the repository.
-docs/IMPLEMENTATION_REPORT.pdf
-docs/PRESENTATION_BRIEF.pdf
+# Internal write-ups and the script that typesets them. Kept outside the
+# repository; the README is the public write-up.
+docs/IMPLEMENTATION_REPORT.*
+docs/PRESENTATION_BRIEF.*
+docs/gen_brief_pdf.py
