@@ -17,15 +17,11 @@ git add .gitignore nb_common.py notebooks/ ekegusii/prepare_psa_ke.py \
         README.md report.md
 
 echo "== staging data the notebooks fetch at runtime =="
-git add PSA-MT/data/bible_en_guz_swh.csv \
-        PSA-MT/data/psa_ke_train.csv PSA-MT/data/psa_ke_test.csv \
-        PSA-MT/data/psa_ke_test_en_guz.csv \
-        PSA-MT/data/psa_ke_manifest.json \
-        PSA-MT/data/lughayangu_sentences.csv \
-        PSA-MT/data/PSA_KE_Final.csv PSA-MT/data/_PSA_EnGuz.csv \
-        corpus_generation/data/corpus_manifest.json \
-        corpus_generation/data/english_psas.csv \
-        corpus_generation/data/psa_parallel_dataset.csv
+git add data/bible_en_guz_swh.csv \
+        data/psa_ke_train.csv data/psa_ke_test.csv data/psa_ke_test_en_guz.csv \
+        data/psa_ke_manifest.json \
+        data/lughayangu_sentences.csv \
+        data/PSA_KE_Final.csv data/_PSA_EnGuz.csv
 
 git status --short
 
@@ -45,4 +41,4 @@ git diff --cached --quiet && { echo "nothing new to commit"; } || git commit -m 
 git push origin HEAD:master
 echo
 echo "pushed. Verify a raw URL resolves before running on the node:"
-echo "  curl -sI https://raw.githubusercontent.com/SamAbr/PSA-MT/main/PSA-MT/data/psa_ke_train.csv | head -1"
+echo "  curl -sI https://raw.githubusercontent.com/SamAbr/PSA-MT/main/data/psa_ke_train.csv | head -1"

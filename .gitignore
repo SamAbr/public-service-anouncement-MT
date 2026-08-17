@@ -15,9 +15,7 @@ __pycache__/
 artifacts/
 
 # Generation checkpoints and logs
-corpus_generation/data/psa_generation_checkpoint.json
-corpus_generation/data/provenance_log.json
-PSA-MT/data/lughayangu_cache.json
+data/lughayangu_cache.json
 *.log
 
 # Manifests ARE committed - they document how each dataset was built, and the
@@ -40,3 +38,8 @@ PSA-MT/data/lughayangu_cache.json
 
 # Scratch: device_bash cannot delete, so files to remove are parked here
 _to_delete/
+
+# The corpus generation project lives outside this repository now. A stale copy
+# may still sit here until it is deleted by hand; do not track it.
+corpus_generation/
+PSA-MT/
