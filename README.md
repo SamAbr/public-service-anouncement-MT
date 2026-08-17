@@ -1,4 +1,4 @@
-# Fine-Tuning Neural Machine Translation Models for Kenyan Public Service Announcements Using a Synthetic Parallel Corpus
+# Fine-Tuning Neural Machine Translation Models for Kenyan Public Service Announcements
 
 > **United States International University–Africa** · School of Science and Technology · Natural Language Processing · 2026
 
@@ -59,8 +59,9 @@ should read it as a fair competitor.
 
 ## 📥 Data collection
 
-Nothing off the shelf exists for English into Ekegusii, so the corpus was built
-from three sources, each collected a different way.
+Nothing off the shelf exists for English into Ekegusii. The corpus comes from
+three sources, each obtained a different way: one aligned by us, one supplied by
+our supervisor, one scraped.
 
 ### 1. Ekegusii Bible, 56,866 pairs
 
@@ -79,42 +80,45 @@ see [Limitations](#-limitations).
 
 ### 2. Kenyan public service announcements, 5,692 pairs
 
-The domain the project is actually about, and the part that had to be
-manufactured.
+The domain the project is actually about, and the only Ekegusii we had in public
+service register rather than scripture.
 
-```
-Scenario knowledge base  (Health, Education, Agriculture, Governance, Safety)
-         │
-         ▼
-   Metadata planner          domain-balanced permutation of scenario × entity × action
-         │
-         ▼
- GPT-5 mini (Azure OpenAI)   constrained few-shot synthesis, 10 parallel workers
-         │
-         ▼
-   Validation pipeline
-   ├── single sentence, 10 to 25 words
-   ├── exactly one clear public action
-   ├── public advisory register
-   ├── no Gazette or press-release language
-   └── Jaccard near-duplicate filtering
-         │
-         ▼
-   Validated English public service announcements
-         │
-         ├──► Kiswahili   via NLLB-200
-         └──► Ekegusii    via GPT-5 mini, few-shot prompted with hand-curated
-                          Ekegusii seed pairs (kept with the corpus generation project)
-```
+**Supplied by our supervisor**, as two corpora that overlap:
 
-Announcements that failed any validation rule were rewritten and re-checked
-rather than discarded, which is why the generator has a rewrite loop rather than
-a simple filter.
+| File | Languages |
+|---|---|
+| `data/PSA_KE_Final.csv` | English · Kiswahili · Ekegusii · Dholuo · Somali |
+| `data/_PSA_EnGuz.csv` | English · Ekegusii, a superset of the above on those two |
 
-**These Ekegusii references are machine generated.** They are the weakest link in
-the corpus and are flagged as such throughout. Because the PSA portion is only
-9.1% of the data yet is the entire target domain, those 5,692 pairs are
-**upsampled ×4** during training so scripture does not swamp them.
+`ekegusii/prepare_psa_ke.py` merges them. 2,897 of PSA_KE_Final's 2,903 English
+rows appear verbatim in `_PSA_EnGuz`, and on that overlap the Ekegusii agrees
+99.4% of the time. The 16 disagreements are almost all rows where PSA_KE_Final is
+blank or left the English untranslated and `_PSA_EnGuz` supplies a real
+translation, so `_PSA_EnGuz` is treated as the authority for Ekegusii and
+PSA_KE_Final contributes the other languages for the rows it covers.
+
+Filtering separates two different problems:
+
+**Hard gates, row dropped.** The row is wrong, and training on it would teach
+the model something false: unrepairable encoding damage, an Ekegusii column that
+is not Ekegusii or is a verbatim copy of the English, ambiguous alignment where
+one Ekegusii string is paired with several unrelated English sentences so at most
+one can be right, plus exact duplicates, empty cells and degenerate lengths.
+
+**Soft flags, row kept and tagged.** The translation is fine, it simply is not an
+announcement: scraped news, speeches and press releases (`document_extract`), and
+unusual length ratios (`ratio_outlier`). These stay in **training**, where they
+still teach Ekegusii, but are excluded from the **test** set, because a test set
+of presidential speeches would not measure announcement translation quality.
+
+Both files arrived with mojibake: em dashes UTF-8 encoded, mis-decoded as cp1252
+and re-encoded up to three times over, producing sequences like
+`ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å"`. `ftfy` is run to a fixed point, then a targeted rule
+handles the residue it cannot resolve.
+
+Because this portion is only 9.1% of the data yet is the entire target domain,
+those 5,692 pairs are **upsampled ×4** during training so scripture does not
+swamp them.
 
 ### 3. Lughayangu everyday sentences, 111 pairs
 
@@ -396,9 +400,10 @@ per-file limit.
 
 ### Not in this repository
 
-The synthetic English announcement corpus was produced by a **separate corpus
-generation project** which is deliberately not tracked here. This repository
-holds the fine-tuning work and the data it consumes, nothing else.
+A **separate corpus generation project**, which synthesised a large English
+announcement corpus and translated it into Kiswahili, Somali and Dholuo, is
+deliberately not tracked here. It fed an earlier line of work, not the released
+model. This repository holds the fine-tuning and the data it consumes.
 
 Only notebook 01 touches the generated corpus, and only to compare register
 against scripture. Point it at that project if you want those figures:
@@ -440,9 +445,10 @@ State these before anyone else does.
 - **The corpus is 90.7% scripture.** Nine tenths of what the model knows about
   Ekegusii comes from the Bible, which is archaic in register and narrow in
   subject matter. This, not model size, is the binding constraint on quality.
-- **The Ekegusii public service announcements are machine generated.** They were
-  produced by a prompted LLM, not written or checked by Ekegusii speakers. The
-  model is therefore partly learning another model's Ekegusii.
+- **The announcement translations are unverified.** The Ekegusii was supplied by
+  our supervisor rather than produced by us, and no member of the team is an
+  Ekegusii speaker, so we filtered for the failures we could detect mechanically
+  and took the rest on trust. A speaker has not spot-checked them.
 - **No human evaluation.** chrF2++ is a proxy. No speaker has yet rated a single
   output, so quality claims are automatic-metric claims only.
 - **Everyday prose is the weakest direction**, at 32.98 chrF2++, which is exactly
@@ -459,8 +465,9 @@ State these before anyone else does.
 
 - **Rebalance away from scripture.** A few thousand contemporary Ekegusii pairs
   would likely buy more than any architectural change.
-- **Replace the synthetic Ekegusii references** with speaker-written or
-  speaker-corrected announcements, and measure how much the synthetic ones cost.
+- **Have a speaker audit the announcement corpus.** It is the smallest part of
+  the data and the whole target domain, so an error rate there costs more than
+  anywhere else.
 - **Human evaluation** with Ekegusii speakers on the held-out announcements.
 - Extend the same transfer-learning recipe to other unsupported Kenyan languages.
 - Durable hosting for the demo. It currently runs on a shared GPU node that is
